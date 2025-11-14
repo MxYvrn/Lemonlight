@@ -34,4 +34,31 @@ public final class Constants {
 
     // Telemetry
     public static final boolean TELEMETRY_VERBOSE = true;
+
+    // ========== AUTONOMOUS CONFIGURATION ==========
+    // Starting pose (right side of field, facing forward)
+    public static final double AUTO_START_X = 12.0;             // inches from field origin
+    public static final double AUTO_START_Y = -62.0;            // right side (negative y)
+    public static final double AUTO_START_HEADING_RAD = Math.toRadians(90); // facing up-field
+
+    // Scoring position (e.g., near backdrop/basket)
+    public static final double AUTO_SCORE_X = 36.0;             // forward toward scoring area
+    public static final double AUTO_SCORE_Y = -36.0;            // adjusted right side
+    public static final double AUTO_SCORE_HEADING_RAD = Math.toRadians(135); // angle toward scoring
+
+    // Parking position (safe zone)
+    public static final double AUTO_PARK_X = 48.0;              // further forward
+    public static final double AUTO_PARK_Y = -60.0;             // back to edge
+    public static final double AUTO_PARK_HEADING_RAD = Math.toRadians(90); // facing forward
+
+    // Autonomous control gains
+    public static final double DRIVE_KP_POS = 0.04;             // proportional gain for position error (in/s per in)
+    public static final double DRIVE_KP_ANGLE = 2.0;            // proportional gain for heading error (rad/s per rad)
+    public static final double AUTO_MAX_SPEED = 0.6;            // max drive power during auto [0, 1]
+    public static final double AUTO_POS_TOLERANCE_IN = 2.0;     // position error tolerance (inches)
+    public static final double AUTO_ANGLE_TOLERANCE_RAD = Math.toRadians(5); // heading error tolerance
+
+    // Autonomous timing
+    public static final double AUTO_STEP_TIMEOUT_S = 5.0;       // max time per state before forcing next
+    public static final double AUTO_SCORE_DURATION_S = 1.5;     // time to hold scoring position
 }
