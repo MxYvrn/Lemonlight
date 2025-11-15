@@ -199,8 +199,8 @@ public final class Constants {
     public static final String FEEDER_MOTOR_NAME = "indexMotor";
 
     // CR Servos (Continuous Rotation)
-    public static final String CR_SERVO_1_NAME = "crServo1";
-    public static final String CR_SERVO_2_NAME = "crServo2";
+    public static final String CR_SERVO_1_NAME = "left_Roller";
+    public static final String CR_SERVO_2_NAME = "right_Roller";
 
     // ========== SHOOTER CONFIGURATION ==========
     // Flywheel speeds in RPM

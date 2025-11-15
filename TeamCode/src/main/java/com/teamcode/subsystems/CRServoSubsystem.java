@@ -43,7 +43,7 @@ public class CRServoSubsystem {
      */
     public void start() {
         if (servo1 != null) servo1.setPower(servo1Power);
-        if (servo2 != null) servo2.setPower(servo2Power);
+        if (servo2 != null) servo2.setPower(-servo2Power);
     }
 
     /**
