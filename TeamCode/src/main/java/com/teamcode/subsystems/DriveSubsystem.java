@@ -205,6 +205,38 @@ public class DriveSubsystem {
         return (voltageSensor != null) ? voltageSensor.getVoltage() : 0.0;
     }
 
+    /**
+     * Robot-centric mecanum drive for TeleOp.
+     * @param forward [-1, 1] forward/backward (negative = backward)
+     * @param strafe [-1, 1] strafe left/right (positive = right)
+     * @param turn [-1, 1] rotation (positive = CCW)
+     * @param speedMultiplier [0, 1] global speed scaling (for precision mode)
+     */
+    public void teleopDrive(double forward, double strafe, double turn, double speedMultiplier) {
+        // Apply deadzone
+        if (Math.abs(forward) < JOYSTICK_DEADZONE) forward = 0.0;
+        if (Math.abs(strafe) < JOYSTICK_DEADZONE) strafe = 0.0;
+        if (Math.abs(turn) < JOYSTICK_DEADZONE) turn = 0.0;
+
+        // Mecanum kinematics
+        double fl = forward + strafe + turn;
+        double fr = forward - strafe - turn;
+        double bl = forward - strafe + turn;
+        double br = forward + strafe - turn;
+
+        // Normalize to [-1, 1]
+        double max = Math.max(1.0, Math.max(Math.max(Math.abs(fl), Math.abs(fr)),
+                                            Math.max(Math.abs(bl), Math.abs(br))));
+        fl /= max;
+        fr /= max;
+        bl /= max;
+        br /= max;
+
+        // Apply speed multiplier and set powers
+        setPowers(fl * speedMultiplier, fr * speedMultiplier,
+                  bl * speedMultiplier, br * speedMultiplier);
+    }
+
     private double clamp(double val, double min, double max) {
         return Math.max(min, Math.min(max, val));
     }

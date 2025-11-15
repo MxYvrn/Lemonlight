@@ -19,6 +19,8 @@ package com.teamcode;
  * │   ✓ odo_right     - Odometry encoder (goBILDA 8192 CPR Through-Bore)  │
  * │   ○ odo_strafe    - Strafe encoder [OPTIONAL - for 3-wheel odometry]  │
  * │   ○ intake        - Intake motor (DcMotor, any FTC-legal motor)        │
+ * │   ○ shooter       - Shooter flywheel (DcMotorEx with encoder)          │
+ * │   ○ m4            - Feeder motor (DcMotor, pushes balls to shooter)    │
  * │                                                                        │
  * │ IMU:                                                                   │
  * │   ✓ imu           - REV Internal IMU (BHI260AP)                        │
@@ -175,4 +177,41 @@ public final class Constants {
     // ========== INTAKE POWER LEVELS ==========
     public static final double INTAKE_POWER_COLLECT = 0.8;
     public static final double INTAKE_POWER_EJECT = -0.6;
+
+    // ========== TELEOP HARDWARE ==========
+    public static final String SHOOTER_MOTOR_NAME = "shooter";
+    public static final String FEEDER_MOTOR_NAME = "m4";
+
+    // ========== SHOOTER CONFIGURATION ==========
+    // Flywheel speeds in RPM
+    // For REV HD Hex Motor: ~2800 RPM max
+    // Adjust based on actual motor specs
+    public static final double SHOOTER_SPEED_LOW = 1200.0;      // RPM (conservative for close shots)
+    public static final double SHOOTER_SPEED_MEDIUM = 1800.0;   // RPM (default idle)
+    public static final double SHOOTER_SPEED_MAX = 2400.0;      // RPM (max power shots)
+
+    // Convert RPM to encoder ticks/sec (goBILDA 5202 motor: 537.7 PPR)
+    public static final double SHOOTER_TICKS_PER_REV = 537.7;
+    public static final double SHOOTER_RPM_TO_TPS = SHOOTER_TICKS_PER_REV / 60.0;
+
+    // PIDF gains for shooter velocity control (tune on actual hardware)
+    public static final double SHOOTER_KP = 5.0;
+    public static final double SHOOTER_KI = 0.1;
+    public static final double SHOOTER_KD = 0.0;
+    public static final double SHOOTER_KF = 12.0;  // Feedforward
+
+    // Shooter tolerance for "at speed" detection
+    public static final double SHOOTER_VELOCITY_TOLERANCE_RPM = 50.0; // within 50 RPM = ready
+
+    // ========== FEEDER (M4) CONFIGURATION ==========
+    public static final double FEEDER_SHOOT_POWER = 0.5;  // Half speed during shooting
+    public static final double FEEDER_RAMP_TIME_MS = 150; // Ramp up time to avoid jamming
+
+    // ========== TELEOP CONTROL THRESHOLDS ==========
+    public static final double TRIGGER_THRESHOLD = 0.1;  // Minimum trigger press to activate
+    public static final double JOYSTICK_DEADZONE = 0.05; // Ignore tiny joystick drift
+
+    // ========== DRIVE SPEEDS ==========
+    public static final double TELEOP_DRIVE_SPEED_NORMAL = 1.0;  // Full speed
+    public static final double TELEOP_DRIVE_SPEED_PRECISION = 0.4; // Slow mode (if bumper held)
 }
