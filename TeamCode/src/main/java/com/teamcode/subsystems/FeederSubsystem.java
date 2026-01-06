@@ -53,12 +53,17 @@ public class FeederSubsystem {
             double elapsed = rampTimer.milliseconds();
             double rampFraction = Math.min(1.0, elapsed / Constants.FEEDER_RAMP_TIME_MS);
             power = Constants.FEEDER_SHOOT_POWER * rampFraction;
-        } else if (rtValue > Constants.TRIGGER_THRESHOLD && intakeDirectionSign != 0.0) {
-            // RT-controlled: couple to intake direction
+        } else if (rtValue > Constants.TRIGGER_THRESHOLD) {
+            // RT-controlled: couple to intake direction if intake is active
             // If intake active (sign = +1), run forward (same direction as intake)
             // If outtake active (sign = -1), run backward (opposite direction of intake)
-            // The sign directly represents the desired direction
-            power = rtValue * Constants.FEEDER_SHOOT_POWER * intakeDirectionSign;
+            // If intake not active (sign = 0), run forward by default
+            if (intakeDirectionSign != 0.0) {
+                power = rtValue * Constants.FEEDER_SHOOT_POWER * intakeDirectionSign;
+            } else {
+                // Intake not active, run forward by default
+                power = rtValue * Constants.FEEDER_SHOOT_POWER;
+            }
         }
         
         feederMotor.setPower(power);

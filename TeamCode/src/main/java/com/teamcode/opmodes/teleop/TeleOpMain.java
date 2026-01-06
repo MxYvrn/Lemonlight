@@ -24,14 +24,12 @@ public class TeleOpMain extends LinearOpMode {
 
     // Button edge detection
     private boolean lastDpadUp = false;
-    private boolean lastDpadDown = false;
+    private boolean lastA1 = false;
+    private boolean lastA2 = false;
     private boolean lastX = false;
     private boolean lastY = false;
     private boolean lastB = false;
     private boolean lastLeftBumper = false;
-
-    // Intake state (toggle/hold)
-    private boolean intakeActive = false;
 
     // Park mode state
     private boolean parkModeActive = false;
@@ -61,7 +59,8 @@ public class TeleOpMain extends LinearOpMode {
         telemetry.addLine("Controls:");
         telemetry.addLine("  GP1: Drive (left stick + right stick)");
         telemetry.addLine("  GP1 LB: Park mode toggle");
-        telemetry.addLine("  GP2 D-down: Intake toggle/hold");
+        telemetry.addLine("  GP1/2 A: Shooter off toggle");
+        telemetry.addLine("  GP2 LT: Intake");
         telemetry.addLine("  GP2 RT: Shoot");
         telemetry.addLine("  GP2 X/Y/B: Shooter speed");
         telemetry.addLine("  GP2 D-up: Outtake toggle");
@@ -97,8 +96,8 @@ public class TeleOpMain extends LinearOpMode {
 
             drive.teleopDrive(forward, strafe, turn, speedMultiplier);
 
-            // Intake (gamepad2 D-PAD DOWN - toggle/hold)
-            intake.update(intakeActive);
+            // Intake (gamepad2 LEFT TRIGGER)
+            intake.update(gamepad2.left_trigger);
 
             // Shooter + Feeder (gamepad2)
             boolean shootCommand = gamepad2.right_trigger > Constants.TRIGGER_THRESHOLD;
@@ -149,16 +148,15 @@ public class TeleOpMain extends LinearOpMode {
         }
         lastLeftBumper = leftBumperNow;
 
-        // Intake toggle/hold (dpad_down)
-        boolean dpadDownNow = gamepad2.dpad_down;
-        if (dpadDownNow && !lastDpadDown) {
-            // Toggle on rising edge
-            intakeActive = !intakeActive;
-        } else if (!dpadDownNow && lastDpadDown) {
-            // Turn off on falling edge (hold behavior)
-            intakeActive = false;
+        // Shooter off toggle (A button on either controller)
+        boolean a1Now = gamepad1.a;
+        boolean a2Now = gamepad2.a;
+        if ((a1Now && !lastA1) || (a2Now && !lastA2)) {
+            shooter.setEnabled(!shooter.isEnabled());
+            telemetry.addLine(shooter.isEnabled() ? ">>> Shooter ENABLED" : ">>> Shooter DISABLED");
         }
-        lastDpadDown = dpadDownNow;
+        lastA1 = a1Now;
+        lastA2 = a2Now;
 
         // Outtake toggle (dpad_up rising edge)
         boolean dpadUpNow = gamepad2.dpad_up;

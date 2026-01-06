@@ -19,6 +19,7 @@ public class ShooterSubsystem {
     private final DcMotorEx shooterMotor;
     private SpeedMode currentMode = SpeedMode.MEDIUM;
     private boolean shootCommandActive = false;
+    private boolean shooterEnabled = true; // Can be disabled by A button
 
     // Cached target velocity (ticks/sec)
     private double targetVelocityTPS = 0.0;
@@ -66,10 +67,33 @@ public class ShooterSubsystem {
 
     /**
      * Main update - call every loop to maintain velocity setpoint.
+     * Uses negative velocity since motor direction is reversed.
      */
     public void update() {
+        if (!shooterEnabled) {
+            shooterMotor.setPower(0.0);
+            return;
+        }
         // Velocity control is handled by DcMotorEx internally via PIDF
-        shooterMotor.setVelocity(targetVelocityTPS);
+        // Use negative velocity because motor direction is set to REVERSE
+        shooterMotor.setVelocity(-targetVelocityTPS);
+    }
+
+    /**
+     * Enable/disable shooter motor (called by A button).
+     */
+    public void setEnabled(boolean enabled) {
+        shooterEnabled = enabled;
+        if (!enabled) {
+            shooterMotor.setPower(0.0);
+        }
+    }
+
+    /**
+     * Check if shooter is enabled.
+     */
+    public boolean isEnabled() {
+        return shooterEnabled;
     }
 
     /**
@@ -91,9 +115,10 @@ public class ShooterSubsystem {
 
     /**
      * Get current shooter velocity in RPM.
+     * Takes absolute value since motor direction is reversed.
      */
     public double getVelocityRPM() {
-        double tps = shooterMotor.getVelocity(); // ticks/sec
+        double tps = Math.abs(shooterMotor.getVelocity()); // ticks/sec (absolute value for reversed motor)
         return tps / Constants.SHOOTER_RPM_TO_TPS;
     }
 

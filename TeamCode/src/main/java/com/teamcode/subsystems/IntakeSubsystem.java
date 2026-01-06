@@ -103,19 +103,17 @@ public class IntakeSubsystem {
     /**
      * Update intake state based on inputs (for TeleOp).
      * Uses power caching to prevent redundant setPower() calls.
-     * @param intakeActive - true to run intake, false to stop
+     * @param intakeTrigger - LT value (0.0 to 1.0)
      */
-    public void update(boolean intakeActive) {
+    public void update(double intakeTrigger) {
         if (intakeMotor == null) return;
 
         // Determine target power based on mode
         double targetPower = 0.0;
-        if (intakeActive) {
-            if (outtakeModeActive) {
-                targetPower = INTAKE_POWER_EJECT;
-            } else {
-                targetPower = INTAKE_POWER_COLLECT;
-            }
+        if (outtakeModeActive) {
+            targetPower = INTAKE_POWER_EJECT;
+        } else if (intakeTrigger > TRIGGER_THRESHOLD) {
+            targetPower = INTAKE_POWER_COLLECT;
         }
 
         // Only update motor if power changed (avoid redundant I2C traffic)
