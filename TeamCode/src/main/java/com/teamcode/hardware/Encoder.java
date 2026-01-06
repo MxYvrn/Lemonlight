@@ -53,7 +53,7 @@ public class Encoder {
         }
     }
 
-    public boolean isPresent() { return motor != null && initialized; }
+    public boolean isPresent() { return initialized && (motor != null || testReader != null); }
 
     /** @return Current raw encoder position in ticks (direction-adjusted) */
     public int getRaw() { return isPresent() ? motor.getCurrentPosition() * dir : 0; }
