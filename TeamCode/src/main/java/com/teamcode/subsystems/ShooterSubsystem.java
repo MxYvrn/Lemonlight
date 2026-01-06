@@ -27,8 +27,6 @@ public class ShooterSubsystem {
     public ShooterSubsystem(HardwareMap hw) {
         shooterMotor = hw.get(DcMotorEx.class, Constants.SHOOTER_MOTOR_NAME);
         
-        // FIXED: Reverse motor direction to correct rotation
-        shooterMotor.setDirection(DcMotorSimple.Direction.REVERSE);
         
         shooterMotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         shooterMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);

@@ -15,7 +15,19 @@ public class Encoder {
     private int lastPos;
     private boolean initialized = false;
 
+    // Test seam: optional injected reader to allow unit tests to run without SDK
+    public interface MotorReader {
+        int getCurrentPosition();
+    }
+
+    private final MotorReader testReader;
+
     public Encoder(HardwareMap hw, String name, int directionMultiplier) {
+        this(hw, name, directionMultiplier, null);
+    }
+
+    // Package-private constructor for tests to inject MotorReader
+    Encoder(HardwareMap hw, String name, int directionMultiplier, MotorReader reader) {
         DcMotorEx m = null;
         try {
             m = (name == null || name.isEmpty()) ? null : hw.get(DcMotorEx.class, name);
@@ -25,9 +37,10 @@ public class Encoder {
         }
         this.motor = m;
         this.dir = directionMultiplier;
+        this.testReader = reader;
         if (motor != null) {
             try {
-                this.lastPos = motor.getCurrentPosition();
+                this.lastPos = (testReader != null ? testReader.getCurrentPosition() : motor.getCurrentPosition()) * dir;
                 this.initialized = true;
             } catch (Exception e) {
                 // Failed to read encoder - treat as not present
@@ -46,7 +59,7 @@ public class Encoder {
      */
     public int getDeltaTicks() {
         if (!isPresent()) return 0;
-        int cur = motor.getCurrentPosition() * dir;
+        int cur = (testReader != null ? testReader.getCurrentPosition() : motor.getCurrentPosition()) * dir;
         int dt = cur - lastPos;
         lastPos = cur;
 
