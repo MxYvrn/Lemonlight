@@ -24,10 +24,14 @@ public class TeleOpMain extends LinearOpMode {
 
     // Button edge detection
     private boolean lastDpadUp = false;
+    private boolean lastDpadDown = false;
     private boolean lastX = false;
     private boolean lastY = false;
     private boolean lastB = false;
     private boolean lastLeftBumper = false;
+
+    // Intake state (toggle/hold)
+    private boolean intakeActive = false;
 
     // Park mode state
     private boolean parkModeActive = false;
@@ -57,7 +61,7 @@ public class TeleOpMain extends LinearOpMode {
         telemetry.addLine("Controls:");
         telemetry.addLine("  GP1: Drive (left stick + right stick)");
         telemetry.addLine("  GP1 LB: Park mode toggle");
-        telemetry.addLine("  GP2 LT: Intake");
+        telemetry.addLine("  GP2 D-down: Intake toggle/hold");
         telemetry.addLine("  GP2 RT: Shoot");
         telemetry.addLine("  GP2 X/Y/B: Shooter speed");
         telemetry.addLine("  GP2 D-up: Outtake toggle");
@@ -93,13 +97,18 @@ public class TeleOpMain extends LinearOpMode {
 
             drive.teleopDrive(forward, strafe, turn, speedMultiplier);
 
-            // Intake (gamepad2)
-            intake.update(gamepad2.left_trigger);
+            // Intake (gamepad2 D-PAD DOWN - toggle/hold)
+            intake.update(intakeActive);
 
             // Shooter + Feeder (gamepad2)
             boolean shootCommand = gamepad2.right_trigger > Constants.TRIGGER_THRESHOLD;
             shooter.setShootCommand(shootCommand);
-            feeder.setFeedCommand(shootCommand);
+            
+            // Feeder: Couple RT motor to intake/outtake direction
+            // RT value * direction sign: same direction as intake, opposite for outtake
+            double rtValue = gamepad2.right_trigger;
+            double intakeDirectionSign = intake.getDirectionSign();
+            feeder.setFeedCommand(shootCommand, rtValue, intakeDirectionSign);
 
             shooter.update();
             feeder.update();
@@ -139,6 +148,17 @@ public class TeleOpMain extends LinearOpMode {
             }
         }
         lastLeftBumper = leftBumperNow;
+
+        // Intake toggle/hold (dpad_down)
+        boolean dpadDownNow = gamepad2.dpad_down;
+        if (dpadDownNow && !lastDpadDown) {
+            // Toggle on rising edge
+            intakeActive = !intakeActive;
+        } else if (!dpadDownNow && lastDpadDown) {
+            // Turn off on falling edge (hold behavior)
+            intakeActive = false;
+        }
+        lastDpadDown = dpadDownNow;
 
         // Outtake toggle (dpad_up rising edge)
         boolean dpadUpNow = gamepad2.dpad_up;

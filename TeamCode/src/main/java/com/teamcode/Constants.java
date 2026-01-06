@@ -204,17 +204,18 @@ public final class Constants {
 
     // ========== SHOOTER CONFIGURATION ==========
     // Flywheel speeds in RPM
-    // ADJUSTED VALUES - tune these based on your actual hardware performance
-    public static final double SHOOTER_SPEED_LOW = 500.0;       // RPM (idle/close shots)
-    public static final double SHOOTER_SPEED_MEDIUM = 800.0;    // RPM (medium distance)
-    public static final double SHOOTER_SPEED_MAX = 1200.0;      // RPM (long distance shots)
+    // UPDATED to match measured values from hardware testing
+    public static final double SHOOTER_SPEED_LOW = 1100.0;      // RPM (idle/close shots) - MEASURED
+    public static final double SHOOTER_SPEED_MEDIUM = 1700.0;   // RPM (medium distance) - MEASURED
+    public static final double SHOOTER_SPEED_MAX = 2000.0;      // RPM (long distance shots) - MEASURED
 
     // Convert RPM to encoder ticks/sec
+    // FIXED: Changed from 5202 (537.7) to 5203 (384.5) to match actual motor hardware
     // NOTE: Verify your motor type and update SHOOTER_TICKS_PER_REV accordingly:
     //   - goBILDA 5202 series: 537.7 PPR
     //   - goBILDA 5203 series: 384.5 PPR
     //   - REV HD Hex Motor: 2240 CPR
-    public static final double SHOOTER_TICKS_PER_REV = 537.7;  // Currently set for goBILDA 5202
+    public static final double SHOOTER_TICKS_PER_REV = 384.5;  // FIXED: goBILDA 5203 series (was 5202)
     public static final double SHOOTER_RPM_TO_TPS = SHOOTER_TICKS_PER_REV / 60.0;
 
     // PIDF gains for shooter velocity control (tune on actual hardware)
