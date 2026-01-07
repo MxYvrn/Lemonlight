@@ -14,6 +14,9 @@ public class FeederSubsystem {
     private boolean wasFeeding = false;
     private double rtValue = 0.0;
     private double intakeDirectionSign = 0.0;
+    // Follow power set by intake subsystem: when non-zero and no RT/shoot command,
+    // feeder will mirror this power (preserve sign for direction coupling).
+    private double followPower = 0.0;
 
     public FeederSubsystem(HardwareMap hw) {
         feederMotor = hw.get(DcMotor.class, Constants.FEEDER_MOTOR_NAME);
@@ -41,13 +44,22 @@ public class FeederSubsystem {
     }
 
     /**
+     * Allow external callers (e.g. Intake subsystem / TeleOp) to request the
+     * feeder follow the intake motor power/direction when RT is not being used.
+     * @param power desired follow power (can be negative for reverse)
+     */
+    public void setFollowPower(double power) {
+        followPower = power;
+    }
+
+    /**
      * Update feeder motor power based on command state.
      * RT motor couples to intake direction: same direction as intake, opposite for outtake.
      * Call every loop.
      */
     public void update() {
         double power = 0.0;
-        
+
         if (feedCommandActive) {
             // Shoot command: ramp up smoothly over FEEDER_RAMP_TIME_MS to avoid jamming
             double elapsed = rampTimer.milliseconds();
@@ -64,8 +76,11 @@ public class FeederSubsystem {
                 // Intake not active, run forward by default
                 power = rtValue * Constants.FEEDER_SHOOT_POWER;
             }
+        } else if (Math.abs(followPower) > 0.01) {
+            // Follow intake motor power/direction when no RT/shoot command is active
+            power = followPower;
         }
-        
+
         feederMotor.setPower(power);
     }
 

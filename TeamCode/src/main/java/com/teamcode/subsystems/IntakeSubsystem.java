@@ -90,10 +90,12 @@ public class IntakeSubsystem {
 
     /**
      * Get direction sign for coupling with other motors.
+     * BUGFIX: Use cached lastPower even if motor becomes null (motor disconnect mid-match).
      * @return +1.0 for intake (collect), -1.0 for outtake (eject), 0.0 for stopped
      */
     public double getDirectionSign() {
-        if (intakeMotor == null || lastPower == 0.0) {
+        // Use lastPower even if motor is null (handles motor disconnect scenario)
+        if (lastPower == 0.0) {
             return 0.0;
         }
         // Positive power = intake (collect), negative power = outtake (eject)
@@ -103,12 +105,11 @@ public class IntakeSubsystem {
     /**
      * Update intake state based on inputs (for TeleOp).
      * Uses power caching to prevent redundant setPower() calls.
+     * BUGFIX: Update lastPower even if motor is null (preserves direction sign for feeder coupling).
      * @param intakeTrigger - LT value (0.0 to 1.0)
      */
     public void update(double intakeTrigger) {
-        if (intakeMotor == null) return;
-
-        // Determine target power based on mode
+        // Determine target power based on mode (calculate even if motor is null)
         double targetPower = 0.0;
         if (outtakeModeActive) {
             targetPower = INTAKE_POWER_EJECT;
@@ -116,10 +117,13 @@ public class IntakeSubsystem {
             targetPower = INTAKE_POWER_COLLECT;
         }
 
-        // Only update motor if power changed (avoid redundant I2C traffic)
+        // Update lastPower cache (used by getDirectionSign even if motor disconnects)
+        // Only update motor hardware if power changed and motor exists
         if (Math.abs(targetPower - lastPower) > 0.01) {
-            intakeMotor.setPower(targetPower);
             lastPower = targetPower;
+            if (intakeMotor != null) {
+                intakeMotor.setPower(targetPower);
+            }
         }
     }
 

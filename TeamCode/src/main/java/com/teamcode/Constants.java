@@ -195,7 +195,7 @@ public final class Constants {
     public static final double INTAKE_POWER_EJECT = -0.6;
 
     // ========== TELEOP HARDWARE ==========
-    public static final String SHOOTER_MOTOR_NAME = "shooterMotor";
+    public static final String SHOOTER_MOTOR_NAME = "shootMotor";
     public static final String FEEDER_MOTOR_NAME = "indexMotor";
 
     // CR Servos (Continuous Rotation)
@@ -205,17 +205,17 @@ public final class Constants {
     // ========== SHOOTER CONFIGURATION ==========
     // Flywheel speeds in RPM
     // UPDATED to match measured values from hardware testing
-    public static final double SHOOTER_SPEED_LOW = 200.0;      // RPM (idle/close shots) - MEASURED
-    public static final double SHOOTER_SPEED_MEDIUM = 250.0;   // RPM (medium distance) - MEASURED
-    public static final double SHOOTER_SPEED_MAX = 300.0;      // RPM (long distance shots) - MEASURED
+    public static final double SHOOTER_SPEED_LOW = 1100.0;      // RPM (idle/close shots) - MEASURED
+    public static final double SHOOTER_SPEED_MEDIUM = 1700.0;   // RPM (medium distance) - MEASURED
+    public static final double SHOOTER_SPEED_MAX = 2000.0;      // RPM (long distance shots) - MEASURED
 
     // Convert RPM to encoder ticks/sec
-    // FIXED: Changed from 5202 (537.7) to 5203 (384.5) to match actual motor hardware
     // NOTE: Verify your motor type and update SHOOTER_TICKS_PER_REV accordingly:
     //   - goBILDA 5202 series: 537.7 PPR
     //   - goBILDA 5203 series: 384.5 PPR
     //   - REV HD Hex Motor: 2240 CPR
-    public static final double SHOOTER_TICKS_PER_REV = 384.5;  // FIXED: goBILDA 5203 series (was 5202)
+    // For testing an encoder CPR mismatch, set to the alternate common value below.
+    public static final double SHOOTER_TICKS_PER_REV = 537.7;  // goBILDA 5202 series (try if 384.5 produced wrong RPM)
     // BUGFIX: Divide by 60 to convert RPM (revolutions per minute) to ticks per second
     // Formula: RPM * ticks_per_rev / 60 = ticks_per_second
     public static final double SHOOTER_RPM_TO_TPS = SHOOTER_TICKS_PER_REV / 60.0;
@@ -224,7 +224,8 @@ public final class Constants {
     public static final double SHOOTER_KP = 5.0;
     public static final double SHOOTER_KI = 0.1;
     public static final double SHOOTER_KD = 0.0;
-    public static final double SHOOTER_KF = 12.0;  // Feedforward
+    // Reduced feedforward for initial testing (helps diagnose KF scaling issues)
+    public static final double SHOOTER_KF = 1.0;  // Feedforward (lowered from 12.0)
 
     // Shooter tolerance for "at speed" detection
     public static final double SHOOTER_VELOCITY_TOLERANCE_RPM = 50.0; // within 50 RPM = ready

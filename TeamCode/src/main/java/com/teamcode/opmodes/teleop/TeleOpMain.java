@@ -35,6 +35,7 @@ public class TeleOpMain extends LinearOpMode {
     private boolean parkModeActive = false;
 
     // Telemetry rate limiting
+    // BUGFIX: Use elapsed time instead of absolute nanoTime to handle overflow safely
     private long lastTelemetryNs = 0;
     private static final long TELEMETRY_INTERVAL_NS = 100_000_000L; // 10Hz
 
@@ -99,6 +100,10 @@ public class TeleOpMain extends LinearOpMode {
             // Intake (gamepad2 LEFT TRIGGER)
             intake.update(gamepad2.left_trigger);
 
+            // Tell feeder to follow intake motor power/direction when intake runs
+            double intakePower = intake.getPower();
+            feeder.setFollowPower(intakePower);
+
             // Shooter + Feeder (gamepad2)
             boolean shootCommand = gamepad2.right_trigger > Constants.TRIGGER_THRESHOLD;
             shooter.setShootCommand(shootCommand);
@@ -113,8 +118,15 @@ public class TeleOpMain extends LinearOpMode {
             feeder.update();
 
             // 3. TELEMETRY (rate-limited)
+            // BUGFIX: Handle nanoTime() overflow by checking for negative deltas
             long now = System.nanoTime();
-            if (now - lastTelemetryNs > TELEMETRY_INTERVAL_NS) {
+            long delta = now - lastTelemetryNs;
+            // If delta is negative, nanoTime() overflowed - reset and continue
+            if (delta < 0) {
+                lastTelemetryNs = now;
+                delta = 0;
+            }
+            if (delta > TELEMETRY_INTERVAL_NS) {
                 updateTelemetry();
                 telemetry.update();
                 lastTelemetryNs = now;
@@ -158,11 +170,18 @@ public class TeleOpMain extends LinearOpMode {
         lastA1 = a1Now;
         lastA2 = a2Now;
 
-        // Outtake toggle (dpad_up rising edge)
+        // No toggle: D-pad down = intake (hold), D-pad up = outtake (hold).
         boolean dpadUpNow = gamepad2.dpad_up;
-        if (dpadUpNow && !lastDpadUp) {
-            intake.toggleOuttakeMode();
+        boolean dpadDownNow = gamepad2.dpad_down;
+        double intakePower = 0.0;
+        if (dpadDownNow) {
+            intakePower = Constants.INTAKE_POWER_COLLECT;
+        } else if (dpadUpNow) {
+            intakePower = Constants.INTAKE_POWER_EJECT;
+        } else if (gamepad2.left_trigger > Constants.TRIGGER_THRESHOLD) {
+            intakePower = Constants.INTAKE_POWER_COLLECT;
         }
+        intake.setPower(intakePower);
         lastDpadUp = dpadUpNow;
 
         // Shooter speed mode changes (X/Y/B rising edges)
@@ -213,7 +232,7 @@ public class TeleOpMain extends LinearOpMode {
 
         telemetry.addLine("=== INTAKE/FEEDER ===");
         telemetry.addData("Intake Power", "%.2f", intake.getPower());
-        telemetry.addData("Outtake Mode", intake.isOuttakeModeActive() ? "ON" : "off");
+        telemetry.addData("Outtake Mode", intake.getPower() < 0 ? "ON" : "off");
         telemetry.addData("Feeder Power", "%.2f", feeder.getPower());
         telemetry.addLine();
 

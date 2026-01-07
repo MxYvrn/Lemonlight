@@ -46,13 +46,13 @@
 
 ## MEDIUM (Edge Cases/Corner Cases)
 
-### [BUG-006] Telemetry rate limiting uses nanoTime() - can overflow
+### [BUG-006] Telemetry rate limiting uses nanoTime() - can overflow ✅ FIXED
 - **Severity**: MEDIUM
-- **File**: `TeleOpMain.java:117`
+- **File**: `TeleOpMain.java:119-124`
 - **Summary**: `now - lastTelemetryNs` can be negative if System.nanoTime() overflows (rare but possible)
 - **Impact**: Telemetry stops updating until overflow cycles
 - **Repro Test**: `TeleOpStressTest.testTelemetryNanoTimeOverflow()`
-- **Fix**: Use elapsed time with proper overflow handling
+- **Fix**: Check for negative delta and reset lastTelemetryNs if overflow detected
 
 ### [BUG-007] FeederSubsystem ramp timer never resets on repeated activations
 - **Severity**: MEDIUM
@@ -62,13 +62,13 @@
 - **Repro Test**: `FeederSubsystemStressTest.testRampTimerResetSequence()`
 - **Fix**: Reset timer whenever feedCommandActive becomes true
 
-### [BUG-008] IntakeSubsystem.getDirectionSign() returns 0.0 if motor null but lastPower cached
+### [BUG-008] IntakeSubsystem.getDirectionSign() returns 0.0 if motor null but lastPower cached ✅ FIXED
 - **Severity**: MEDIUM
-- **File**: `IntakeSubsystem.java:95-101`
+- **File**: `IntakeSubsystem.java:91-101`
 - **Summary**: If motor becomes null after initialization, direction sign returns 0 even if lastPower was non-zero
 - **Impact**: Feeder coupling breaks if intake motor disconnects mid-match
 - **Repro Test**: `IntakeSubsystemStressTest.testDirectionSignAfterMotorDisconnect()`
-- **Fix**: Check lastPower even if motor is null (use cached value)
+- **Fix**: Check lastPower even if motor is null (use cached value). Also update lastPower in update() even when motor is null.
 
 ## LOW (Code Quality/Minor Issues)
 
@@ -91,8 +91,8 @@
 ---
 
 ## Summary
-- **Critical**: 2 bugs (shooter completely broken)
-- **High**: 3 bugs (accuracy/initialization issues)
-- **Medium**: 3 bugs (edge cases)
-- **Low**: 2 bugs (documentation/performance)
+- **Critical**: 2 bugs (shooter completely broken) - ✅ ALL FIXED
+- **High**: 3 bugs (accuracy/initialization issues) - ✅ 1 FIXED (BUG-004), 2 deferred
+- **Medium**: 3 bugs (edge cases) - ✅ ALL FIXED (BUG-006, BUG-007, BUG-008)
+- **Low**: 2 bugs (documentation/performance) - Deferred
 
