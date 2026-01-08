@@ -56,7 +56,11 @@ public class Encoder {
     public boolean isPresent() { return initialized && (motor != null || testReader != null); }
 
     /** @return Current raw encoder position in ticks (direction-adjusted) */
-    public int getRaw() { return isPresent() ? motor.getCurrentPosition() * dir : 0; }
+    public int getRaw() {
+        if (!isPresent()) return 0;
+        int cur = (testReader != null) ? testReader.getCurrentPosition() : motor.getCurrentPosition();
+        return cur * dir;
+    }
 
     /**
      * @return Signed delta ticks since last call. Clamped to prevent overflow corruption.
@@ -76,6 +80,7 @@ public class Encoder {
 
     public void reset() {
         if (!isPresent()) return;
-        lastPos = motor.getCurrentPosition() * dir;
+        int cur = (testReader != null) ? testReader.getCurrentPosition() : motor.getCurrentPosition();
+        lastPos = cur * dir;
     }
 }

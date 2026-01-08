@@ -30,6 +30,7 @@ public class ShooterSubsystem {
         DcMotorEx sm = null;
         try {
             sm = hw.get(DcMotorEx.class, Constants.SHOOTER_MOTOR_NAME);
+           
             // Reverse motor direction so positive velocity spins the flywheel the other way
             sm.setDirection(DcMotorSimple.Direction.REVERSE);
 
@@ -108,15 +109,6 @@ public class ShooterSubsystem {
         return shooterEnabled;
     }
 
-    /**
-     * Stop shooter (for emergency or end of match).
-     */
-    public void stop() {
-        if (shooterMotor != null) {
-            shooterMotor.setPower(0.0);
-            shooterMotor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-        }
-    }
 
     /**
      * Check if shooter is at target speed (within tolerance).
@@ -161,5 +153,15 @@ public class ShooterSubsystem {
     // Internal helper to set target RPM (conversion to encoder velocity done at update())
     private void setTargetSpeed(SpeedMode mode) {
         targetVelocityRPM = mode.rpm;
+    }
+
+    /**
+     * Stop shooter motor immediately (no-op if motor missing).
+     * Added to satisfy callers that expect a cleanup method.
+     */
+    public void stop() {
+        if (shooterMotor != null) shooterMotor.setPower(0.0);
+        targetVelocityRPM = 0.0;
+        shootCommandActive = false;
     }
 }

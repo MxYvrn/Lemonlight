@@ -40,7 +40,7 @@ public class Odometry {
 
     private static double ticksToInches(int ticks) {
         double wheelCircum = Math.PI * WHEEL_DIAMETER_IN;
-        return (ticks / TICKS_PER_REV) * (wheelCircum * GEAR_RATIO);
+        return (ticks / (double) TICKS_PER_REV) * (wheelCircum * GEAR_RATIO);
     }
 
     public Odometry(HardwareMap hw) {
