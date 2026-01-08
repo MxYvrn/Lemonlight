@@ -31,8 +31,6 @@ public class ShooterSubsystem {
         try {
             sm = hw.get(DcMotorEx.class, Constants.SHOOTER_MOTOR_NAME);
            
-            // Reverse motor direction so positive velocity spins the flywheel the other way
-            sm.setDirection(DcMotorSimple.Direction.REVERSE);
 
             sm.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
             sm.setMode(DcMotor.RunMode.RUN_USING_ENCODER);

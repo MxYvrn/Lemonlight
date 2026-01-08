@@ -55,6 +55,7 @@ public class Auto_AprilTag_BallRoute extends LinearOpMode {
     // Selected path from AprilTag
     private AutoPath selectedPath = AutoPath.CENTER;
     private boolean tagDetectionComplete = false;
+    private boolean cameraStreamingStopped = false; // Track if we've stopped camera streaming
 
     // Pre-allocated poses (zero-alloc)
     private Pose2d targetPose = new Pose2d();
@@ -81,8 +82,10 @@ public class Auto_AprilTag_BallRoute extends LinearOpMode {
             vision = new AprilTagSelector(hardwareMap.get(WebcamName.class, Constants.WEBCAM_NAME));
 
             // Cache initial voltage
-            if (hardwareMap.voltageSensor.iterator().hasNext()) {
-                cachedVoltage = hardwareMap.voltageSensor.iterator().next().getVoltage();
+            // BUGFIX: Store iterator to avoid creating separate iterators
+            var voltageIterator = hardwareMap.voltageSensor.iterator();
+            if (voltageIterator.hasNext()) {
+                cachedVoltage = voltageIterator.next().getVoltage();
             }
 
             // Set telemetry transmission interval (reduces Driver Station bandwidth)
@@ -127,8 +130,9 @@ public class Auto_AprilTag_BallRoute extends LinearOpMode {
         telemetry.addData("Path", selectedPath);
         telemetry.update();
 
-        // Stop camera streaming to save resources
-        vision.stopStreaming();
+        // BUGFIX: Delay stopStreaming() until after retry window (first 1 second)
+        // to allow vision.update() retry in handleDriveToBall() to work.
+        // Will be called after retry completes or times out.
 
         // Reset odometry to starting position with encoder flush
         Pose2d startPose = new Pose2d(
@@ -243,6 +247,14 @@ public class Auto_AprilTag_BallRoute extends LinearOpMode {
             if (vision.hasRecentDetection()) {
                 tagDetectionComplete = true;
             }
+        }
+        
+        // BUGFIX: Stop camera streaming after retry window completes to save resources
+        // This ensures retry logic can work before streaming is stopped
+        // Only stop once to avoid repeated calls
+        if (!cameraStreamingStopped && stateTimer.seconds() >= 1.0 && vision.isCameraReady()) {
+            vision.stopStreaming();
+            cameraStreamingStopped = true;
         }
 
         // Set target to ball pickup location
@@ -379,51 +391,4 @@ public class Auto_AprilTag_BallRoute extends LinearOpMode {
         }
     }
 
-    private void updateTelemetry() {
-        telemetry.addLine("=== AUTONOMOUS ===");
-        telemetry.addData("State", currentState);
-        telemetry.addData("Path", selectedPath);
-        telemetry.addData("Runtime", "%.1f / 30.0 s", globalTimer.seconds());
-        telemetry.addData("State Time", "%.1f s", stateTimer.seconds());
-        telemetry.addLine();
-
-        telemetry.addLine("--- POSE ---");
-        telemetry.addData("X (in)", "%.1f", currentPose.x);
-        telemetry.addData("Y (in)", "%.1f", currentPose.y);
-        telemetry.addData("Heading (deg)", "%.1f", Math.toDegrees(currentPose.heading));
-        telemetry.addLine();
-
-        telemetry.addLine("--- TARGET ---");
-        telemetry.addData("Target X", "%.1f", targetPose.x);
-        telemetry.addData("Target Y", "%.1f", targetPose.y);
-        telemetry.addData("Target Hdg", "%.1f°", Math.toDegrees(targetPose.heading));
-        telemetry.addLine();
-
-        double errorDist = Math.hypot(targetPose.x - currentPose.x, targetPose.y - currentPose.y);
-        telemetry.addData("Distance to Target", "%.1f in", errorDist);
-
-        // Update cached voltage every 500ms (overflow-safe)
-        long now = System.nanoTime();
-        long vdelta = now - lastVoltageReadNs;
-        if (vdelta < 0) {
-            lastVoltageReadNs = now;
-            vdelta = 0;
-        }
-        if (vdelta > 500_000_000L) {
-            cachedVoltage = drive.getVoltage();
-            lastVoltageReadNs = now;
-        }
-        telemetry.addData("Battery", "%.1f V", cachedVoltage);
-
-        // Health warnings
-        if (!drive.checkMotorHealth()) {
-            telemetry.addLine("⚠️ MOTOR FAILURE DETECTED");
-        }
-        if (odometry.isStrafeEncoderMissing()) {
-            telemetry.addLine("⚠️ 2-WHEEL ODO (strafe encoder missing)");
-        }
-        if (odometry.getImuFailureCount() >= 5) {
-            telemetry.addLine("⚠️ IMU FAILED (encoder-only heading)");
-        }
-    }
 }

@@ -42,9 +42,9 @@ public class DriveSubsystem {
         this.maxPower = AUTO_MAX_SPEED;
 
         // Initialize voltage sensor for compensation
-        voltageSensor = hw.voltageSensor.iterator().hasNext()
-            ? hw.voltageSensor.iterator().next()
-            : null;
+        // BUGFIX: Store iterator to avoid creating separate iterators
+        var voltageIterator = hw.voltageSensor.iterator();
+        voltageSensor = voltageIterator.hasNext() ? voltageIterator.next() : null;
 
         // Enable bulk caching for all hubs
         List<LynxModule> allHubs = hw.getAll(LynxModule.class);
@@ -60,10 +60,10 @@ public class DriveSubsystem {
             br = hw.get(DcMotorEx.class, "BRMotor");
 
             // Standard mecanum motor directions
-            fl.setDirection(DcMotorSimple.Direction.REVERSE);
-            bl.setDirection(DcMotorSimple.Direction.REVERSE);
-            fr.setDirection(DcMotorSimple.Direction.FORWARD);
-            br.setDirection(DcMotorSimple.Direction.FORWARD);
+            fl.setDirection(DcMotorSimple.Direction.FORWARD);
+            bl.setDirection(DcMotorSimple.Direction.FORWARD);
+            fr.setDirection(DcMotorSimple.Direction.REVERSE);
+            br.setDirection(DcMotorSimple.Direction.REVERSE);
 
             setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
             setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);

@@ -28,7 +28,7 @@ package com.teamcode;
  * │ Motors (DcMotorEx):                                                    │
  * │   Port 0: shooterMotor   - Shooter flywheel (goBILDA 5203 series)       │
  * │   Port 1: intakeMotor  - Intake roller (goBILDA 5203 series)          │
- * │   Port 2: FeederMotor   - Feeder/indexer (goBILDA 5203 series)         │
+ * │   Port 2: feederMotor   - Feeder/indexer (goBILDA 5203 series)         │
  * │                                                                        │
  * │ IMU:                                                                   │
  * │   I2C Bus 0: imu       - REV Internal IMU (BHI260AP)                  │
@@ -196,7 +196,7 @@ public final class Constants {
 
     // ========== TELEOP HARDWARE ==========
     public static final String SHOOTER_MOTOR_NAME = "shootMotor";
-    public static final String FEEDER_MOTOR_NAME = "FeederMotor";
+    public static final String FEEDER_MOTOR_NAME = "feederMotor";
 
     // ========== SHOOTER CONFIGURATION ==========
     // Flywheel speeds in RPM
