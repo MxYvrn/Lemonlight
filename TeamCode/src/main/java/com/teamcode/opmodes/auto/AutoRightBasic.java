@@ -107,7 +107,12 @@ public class AutoRightBasic extends LinearOpMode {
 
             // 3) Telemetry (rate-limited to 10Hz to prevent I2C congestion)
             long now = System.nanoTime();
-            if (now - lastTelemetryNs > TELEMETRY_INTERVAL_NS) {
+            long delta = now - lastTelemetryNs;
+            if (delta < 0) { // handle nanoTime overflow
+                lastTelemetryNs = now;
+                delta = 0;
+            }
+            if (delta > TELEMETRY_INTERVAL_NS) {
                 updateTelemetry();
                 telemetry.update();
                 lastTelemetryNs = now;

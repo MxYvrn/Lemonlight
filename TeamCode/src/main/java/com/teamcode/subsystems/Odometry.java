@@ -67,13 +67,21 @@ public class Odometry {
         strafeEncoderMissing = (strafeEnc == null || !strafeEnc.isPresent());
 
         if (USE_IMU) {
-            imu = hw.get(IMU.class, IMU_NAME);
-            IMU.Parameters params = new IMU.Parameters(new RevHubOrientationOnRobot(
-                    RevHubOrientationOnRobot.LogoFacingDirection.LEFT,
-                    RevHubOrientationOnRobot.UsbFacingDirection.UP));
-            imu.initialize(params);
-            imu.resetYaw();
-            imuHeadingRad = 0.0;
+            IMU tmpImu = null;
+            try {
+                tmpImu = hw.get(IMU.class, IMU_NAME);
+                IMU.Parameters params = new IMU.Parameters(new RevHubOrientationOnRobot(
+                        RevHubOrientationOnRobot.LogoFacingDirection.LEFT,
+                        RevHubOrientationOnRobot.UsbFacingDirection.UP));
+                tmpImu.initialize(params);
+                tmpImu.resetYaw();
+                imuHeadingRad = 0.0;
+            } catch (Exception e) {
+                // IMU not found or initialization failed: operate in encoder-only mode
+                tmpImu = null;
+                imuFailureCount = IMU_MAX_FAILURES; // mark as unavailable
+            }
+            imu = tmpImu;
         } else {
             imu = null;
         }
@@ -164,16 +172,29 @@ public class Odometry {
 
         // Exact arc correction for rotation (handles large angles correctly)
         double dX_robot, dY_robot;
-        if (Math.abs(dTheta_enc) < 1e-6) {
+        // Use numerically stable sinc-like ratios to avoid division by tiny dTheta_enc
+        double absTheta = Math.abs(dTheta_enc);
+        if (absTheta < 1e-6) {
             // Straight line motion (avoid division by zero)
             dX_robot = forward;
             dY_robot = lateral;
         } else {
-            // Arc correction for rotation using sinc approximation
-            double sinTheta = Math.sin(dTheta_enc);
-            double cosTheta = Math.cos(dTheta_enc);
-            dX_robot = (sinTheta / dTheta_enc) * forward - ((1 - cosTheta) / dTheta_enc) * lateral;
-            dY_robot = ((1 - cosTheta) / dTheta_enc) * forward + (sinTheta / dTheta_enc) * lateral;
+            // Compute safe ratios
+            double ratioSinOverTheta;
+            double ratioOneMinusCosOverTheta;
+            // For very small angles use Taylor expansions for better precision
+            if (absTheta < 1e-3) {
+                // sin(x)/x ≈ 1 - x^2/6
+                ratioSinOverTheta = 1.0 - (dTheta_enc * dTheta_enc) / 6.0;
+                // (1-cos(x))/x ≈ x/2 - x^3/24
+                ratioOneMinusCosOverTheta = dTheta_enc / 2.0 - (Math.pow(dTheta_enc, 3) / 24.0);
+            } else {
+                ratioSinOverTheta = Math.sin(dTheta_enc) / dTheta_enc;
+                ratioOneMinusCosOverTheta = (1.0 - Math.cos(dTheta_enc)) / dTheta_enc;
+            }
+
+            dX_robot = ratioSinOverTheta * forward - ratioOneMinusCosOverTheta * lateral;
+            dY_robot = ratioOneMinusCosOverTheta * forward + ratioSinOverTheta * lateral;
         }
 
         // Rotate to field frame using initial heading

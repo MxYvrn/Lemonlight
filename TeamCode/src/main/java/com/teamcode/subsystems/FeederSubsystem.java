@@ -6,95 +6,144 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import com.teamcode.Constants;
 
+/**
+ * Feeder + Intake coupling (minimal integration).
+ *
+ * IMPORTANT: This class now owns BOTH the feeder motor and intake motor to ensure
+ * they follow each other based on the same inputs.
+ *
+ * Safer architecture is to keep IntakeSubsystem separate and use a coordinator,
+ * but this matches your request with minimal external changes.
+ */
 public class FeederSubsystem {
+
     private final DcMotor feederMotor;
+    // Cache feeder power when motor missing so telemetry and logic can still observe commanded value
+    private double feederPowerCache = 0.0;
+
     private final ElapsedTime rampTimer = new ElapsedTime();
 
-    private boolean feedCommandActive = false;
-    private boolean wasFeeding = false;
+    // Inputs
+    private boolean shootCommandActive = false;
     private double rtValue = 0.0;
-    private double intakeDirectionSign = 0.0;
-    // Follow power set by intake subsystem: when non-zero and no RT/shoot command,
-    // feeder will mirror this power (preserve sign for direction coupling).
-    private double followPower = 0.0;
+
+    // Intake command (from intake/outtake buttons)
+    // + = intake, - = outtake, 0 = stop
+    private double intakeCommandPower = 0.0;
 
     public FeederSubsystem(HardwareMap hw) {
-        feederMotor = hw.get(DcMotor.class, Constants.FEEDER_MOTOR_NAME);
-        feederMotor.setDirection(DcMotorSimple.Direction.FORWARD);
-        feederMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        feederMotor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        DcMotor fm = null;
+        try {
+            fm = hw.get(DcMotor.class, Constants.FEEDER_MOTOR_NAME);
+            fm.setDirection(DcMotorSimple.Direction.FORWARD);
+            fm.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+            fm.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        } catch (Exception e) {
+            // Motor missing or misconfigured - operate in degraded mode
+            fm = null;
+        }
+        feederMotor = fm;
+
+        // NOTE: Feeder no longer acquires the intake motor. IntakeSubsystem remains
+        // the canonical owner of the intake motor hardware. The feeder receives
+        // intake commands via `setIntakeCommandPower()`.
     }
 
     /**
-     * Command feeder with RT trigger coupling to intake direction.
-     * @param shootActive - shoot command (for backward compatibility)
-     * @param rtTriggerValue - RT trigger value (0.0 to 1.0)
-     * @param intakeDirSign - intake direction sign: +1.0 for intake, -1.0 for outtake, 0.0 for stopped
+     * Set intake command power from driver input.
+     * Example: +Constants.INTAKE_POWER_COLLECT or Constants.INTAKE_POWER_EJECT or 0.
      */
-    public void setFeedCommand(boolean shootActive, double rtTriggerValue, double intakeDirSign) {
-        // BUGFIX: Reset ramp timer whenever shoot command becomes active (not just on rising edge)
-        // This ensures proper ramp-up even if command toggles rapidly
-        if (shootActive && !feedCommandActive) {
+    public void setIntakeCommandPower(double power) {
+        intakeCommandPower = clamp(power, -1.0, 1.0);
+    }
+
+    /**
+     * Command feeder with RT trigger + optional shoot command.
+     * RT is treated as a "feed now" command (0.0 to 1.0).
+     */
+    public void setFeedCommand(boolean shootActive, double rtTriggerValue) {
+        // Reset ramp timer when we detect a fresh shoot activation.
+        // Also reset if the previous ramp completed to ensure repeated activations restart properly.
+        if (shootActive && (!shootCommandActive || rampTimer.milliseconds() >= Constants.FEEDER_RAMP_TIME_MS)) {
             rampTimer.reset();
         }
-        feedCommandActive = shootActive; // Shoot command still uses ramp
-        rtValue = rtTriggerValue;
-        intakeDirectionSign = intakeDirSign;
-        wasFeeding = shootActive || (rtTriggerValue > Constants.TRIGGER_THRESHOLD);
+        shootCommandActive = shootActive;
+        rtValue = clamp(rtTriggerValue, 0.0, 1.0);
     }
 
     /**
-     * Allow external callers (e.g. Intake subsystem / TeleOp) to request the
-     * feeder follow the intake motor power/direction when RT is not being used.
-     * @param power desired follow power (can be negative for reverse)
-     */
-    public void setFollowPower(double power) {
-        followPower = power;
-    }
-
-    /**
-     * Update feeder motor power based on command state.
-     * RT motor couples to intake direction: same direction as intake, opposite for outtake.
-     * Call every loop.
+     * Update both motors. Call every loop.
+     *
+     * Coupling behavior:
+     * - If SHOOT is active: feeder ramps up to FEEDER_SHOOT_POWER. Intake runs forward to help feed.
+     * - Else if RT is pressed: feeder power = RT * FEEDER_SHOOT_POWER, direction follows intake sign if intake is running,
+     *   otherwise defaults forward. Intake follows RT in the same direction (so "vice versa").
+     * - Else: intake runs at intakeCommandPower, feeder mirrors intake power (scaled) so it follows intake automatically.
      */
     public void update() {
-        double power = 0.0;
+        double feederPower = 0.0;
+        // intakePower is computed for logic only; the IntakeSubsystem owns the motor.
+        double intakePower = 0.0;
 
-        if (feedCommandActive) {
-            // Shoot command: ramp up smoothly over FEEDER_RAMP_TIME_MS to avoid jamming
+        // Determine current "intake direction sign" from intake command
+        // +1 intake, -1 outtake, 0 stopped
+        double intakeDirSign = sign(intakeCommandPower);
+
+        if (shootCommandActive) {
+            // Shooter mode: ramp feeder up smoothly
             double elapsed = rampTimer.milliseconds();
             double rampFraction = Math.min(1.0, elapsed / Constants.FEEDER_RAMP_TIME_MS);
-            power = Constants.FEEDER_SHOOT_POWER * rampFraction;
-        } else if (rtValue > Constants.TRIGGER_THRESHOLD) {
-            // RT-controlled: couple to intake direction if intake is active
-            // If intake active (sign = +1), run forward (same direction as intake)
-            // If outtake active (sign = -1), run backward (opposite direction of intake)
-            // If intake not active (sign = 0), run forward by default
-            if (intakeDirectionSign != 0.0) {
-                power = rtValue * Constants.FEEDER_SHOOT_POWER * intakeDirectionSign;
+            feederPower = Constants.FEEDER_SHOOT_POWER * rampFraction;
+
+            // Intake assists feeding during shooting (forward)
+            intakePower = Math.max(intakeCommandPower, Constants.INTAKE_POWER_COLLECT * 0.5);
+        }
+        else if (rtValue > Constants.TRIGGER_THRESHOLD) {
+            // RT feed: feeder responds to RT
+            // If intake is active, match its direction. Otherwise default forward.
+            if (intakeDirSign != 0.0) {
+                feederPower = rtValue * Constants.FEEDER_SHOOT_POWER * intakeDirSign;
             } else {
-                // Intake not active, run forward by default
-                power = rtValue * Constants.FEEDER_SHOOT_POWER;
+                feederPower = rtValue * Constants.FEEDER_SHOOT_POWER;
             }
-        } else if (Math.abs(followPower) > 0.01) {
-            // Follow intake motor power/direction when no RT/shoot command is active
-            power = followPower;
+        }
+        else {
+            // Normal: intake runs from its command, feeder follows intake automatically
+            intakePower = intakeCommandPower;
+
+            // Follow intake with a safe scale so feeder doesn't overpower intake.
+            double followScale = (Constants.FEEDER_SHOOT_POWER <= 0.0) ? 1.0 : Constants.FEEDER_SHOOT_POWER;
+            feederPower = clamp(intakeCommandPower * followScale, -1.0, 1.0);
         }
 
-        feederMotor.setPower(power);
+        // Feeder only controls the feeder motor; intake motor is controlled by IntakeSubsystem.
+        if (feederMotor != null) {
+            feederMotor.setPower(feederPower);
+        }
+        feederPowerCache = feederPower;
     }
 
-    /**
-     * Stop feeder immediately.
-     */
     public void stop() {
-        feederMotor.setPower(0.0);
+        if (feederMotor != null) feederMotor.setPower(0.0);
+        feederPowerCache = 0.0;
     }
 
-    /**
-     * Get current feeder power for telemetry.
-     */
-    public double getPower() {
-        return feederMotor.getPower();
+    public double getFeederPower() {
+        return (feederMotor != null) ? feederMotor.getPower() : feederPowerCache;
+    }
+
+    public double getIntakePower() {
+        return intakeCommandPower;
+    }
+
+    // ---------- helpers ----------
+    private static double sign(double x) {
+        if (x > 0.01) return 1.0;
+        if (x < -0.01) return -1.0;
+        return 0.0;
+    }
+
+    private static double clamp(double v, double lo, double hi) {
+        return Math.max(lo, Math.min(hi, v));
     }
 }

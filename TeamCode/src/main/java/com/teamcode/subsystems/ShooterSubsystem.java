@@ -17,28 +17,38 @@ public class ShooterSubsystem {
     }
 
     private final DcMotorEx shooterMotor;
+    // Cache last commanded encoder velocity for diagnostics when motor missing
+    private double lastTargetEncoderVelocity = 0.0;
     private SpeedMode currentMode = SpeedMode.MEDIUM;
     private boolean shootCommandActive = false;
     private boolean shooterEnabled = true; // Can be disabled by A button
 
-    // Cached target velocity (ticks/sec)
-    private double targetVelocityTPS = 0.0;
+    // Cached target velocity (RPM)
+    private double targetVelocityRPM = 0.0;
 
     public ShooterSubsystem(HardwareMap hw) {
-        shooterMotor = hw.get(DcMotorEx.class, Constants.SHOOTER_MOTOR_NAME);
-        
-        
-        shooterMotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        shooterMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        shooterMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT); // Coast for flywheel
+        DcMotorEx sm = null;
+        try {
+            sm = hw.get(DcMotorEx.class, Constants.SHOOTER_MOTOR_NAME);
+            // Reverse motor direction so positive velocity spins the flywheel the other way
+            sm.setDirection(DcMotorSimple.Direction.REVERSE);
 
-        // Set PIDF for velocity control
-        shooterMotor.setVelocityPIDFCoefficients(
-            Constants.SHOOTER_KP,
-            Constants.SHOOTER_KI,
-            Constants.SHOOTER_KD,
-            Constants.SHOOTER_KF
-        );
+            sm.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+            sm.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+            sm.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT); // Coast for flywheel
+
+            // Set PIDF for velocity control
+            sm.setVelocityPIDFCoefficients(
+                Constants.SHOOTER_KP,
+                Constants.SHOOTER_KI,
+                Constants.SHOOTER_KD,
+                Constants.SHOOTER_KF
+            );
+        } catch (Exception e) {
+            // Hardware missing or misconfigured - operate in degraded mode (no motor)
+            sm = null;
+        }
+        shooterMotor = sm;
 
         // Start at medium idle speed
         setTargetSpeed(currentMode);
@@ -65,16 +75,20 @@ public class ShooterSubsystem {
 
     /**
      * Main update - call every loop to maintain velocity setpoint.
-     * BUGFIX: Motor direction is FORWARD (user removed REVERSE), so use positive velocity.
-     */
+     **/
+    
     public void update() {
         if (!shooterEnabled) {
-            shooterMotor.setPower(0.0);
+            if (shooterMotor != null) shooterMotor.setPower(0.0);
             return;
         }
-        // Velocity control is handled by DcMotorEx internally via PIDF
-        // Use positive velocity since motor direction is FORWARD
-        shooterMotor.setVelocity(targetVelocityTPS);
+        // Convert target RPM to encoder velocity for the motor controller
+        double targetEncoderVelocity = targetVelocityRPM * Constants.SHOOTER_ENCODER_VELOCITY_PER_RPM;
+        lastTargetEncoderVelocity = targetEncoderVelocity;
+        if (shooterMotor != null) {
+            // Velocity control is handled by DcMotorEx internally via PIDF
+            shooterMotor.setVelocity(targetEncoderVelocity);
+        }
     }
 
     /**
@@ -83,7 +97,7 @@ public class ShooterSubsystem {
     public void setEnabled(boolean enabled) {
         shooterEnabled = enabled;
         if (!enabled) {
-            shooterMotor.setPower(0.0);
+            if (shooterMotor != null) shooterMotor.setPower(0.0);
         }
     }
 
@@ -98,8 +112,10 @@ public class ShooterSubsystem {
      * Stop shooter (for emergency or end of match).
      */
     public void stop() {
-        shooterMotor.setPower(0.0);
-        shooterMotor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        if (shooterMotor != null) {
+            shooterMotor.setPower(0.0);
+            shooterMotor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        }
     }
 
     /**
@@ -116,8 +132,9 @@ public class ShooterSubsystem {
      * BUGFIX: Take absolute value to handle both directions safely.
      */
     public double getVelocityRPM() {
-        double tps = Math.abs(shooterMotor.getVelocity()); // ticks/sec (absolute value for safety)
-        return tps / Constants.SHOOTER_RPM_TO_TPS;
+        if (shooterMotor == null) return 0.0;
+        double encoderVelocity = Math.abs(shooterMotor.getVelocity()); // encoder velocity (absolute value for safety)
+        return encoderVelocity / Constants.SHOOTER_ENCODER_VELOCITY_PER_RPM; // convert encoder velocity -> RPM
     }
 
     /**
@@ -141,8 +158,8 @@ public class ShooterSubsystem {
         return shootCommandActive;
     }
 
-    // Internal helper to convert RPM to ticks/sec and set velocity
+    // Internal helper to set target RPM (conversion to encoder velocity done at update())
     private void setTargetSpeed(SpeedMode mode) {
-        targetVelocityTPS = mode.rpm * Constants.SHOOTER_RPM_TO_TPS;
+        targetVelocityRPM = mode.rpm;
     }
 }

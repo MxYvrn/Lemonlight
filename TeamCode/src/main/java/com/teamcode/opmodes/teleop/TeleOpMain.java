@@ -3,7 +3,6 @@ package com.teamcode.opmodes.teleop;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.teamcode.Constants;
-import com.teamcode.subsystems.CRServoSubsystem;
 import com.teamcode.subsystems.DriveSubsystem;
 import com.teamcode.subsystems.FeederSubsystem;
 import com.teamcode.subsystems.IntakeSubsystem;
@@ -20,7 +19,6 @@ public class TeleOpMain extends LinearOpMode {
     private ShooterSubsystem shooter;
     private FeederSubsystem feeder;
     private IntakeSubsystem intake;
-    private CRServoSubsystem crServos;
 
     // Button edge detection
     private boolean lastDpadUp = false;
@@ -50,7 +48,6 @@ public class TeleOpMain extends LinearOpMode {
         shooter = new ShooterSubsystem(hardwareMap);
         feeder = new FeederSubsystem(hardwareMap);
         intake = new IntakeSubsystem(hardwareMap, Constants.INTAKE_MOTOR_NAME);
-        crServos = new CRServoSubsystem(hardwareMap);
 
         // Set shooter to medium idle speed
         shooter.setSpeedMode(ShooterSubsystem.SpeedMode.MEDIUM);
@@ -100,19 +97,18 @@ public class TeleOpMain extends LinearOpMode {
             // Intake (gamepad2 LEFT TRIGGER)
             intake.update(gamepad2.left_trigger);
 
-            // Tell feeder to follow intake motor power/direction when intake runs
-            double intakePower = intake.getPower();
-            feeder.setFollowPower(intakePower);
+            // Tell feeder about intake button commands -> set intake command power
+            // If D-pad overrides are present, use them; otherwise use the actual intake motor power.
+            double intakeCmd = 0.0;
+            if (gamepad2.dpad_down) intakeCmd = Constants.INTAKE_POWER_COLLECT;
+            else if (gamepad2.dpad_up) intakeCmd = Constants.INTAKE_POWER_EJECT;
+            else intakeCmd = intake.getPower();
+            feeder.setIntakeCommandPower(intakeCmd);
 
             // Shooter + Feeder (gamepad2)
-            boolean shootCommand = gamepad2.right_trigger > Constants.TRIGGER_THRESHOLD;
-            shooter.setShootCommand(shootCommand);
-            
-            // Feeder: Couple RT motor to intake/outtake direction
-            // RT value * direction sign: same direction as intake, opposite for outtake
-            double rtValue = gamepad2.right_trigger;
-            double intakeDirectionSign = intake.getDirectionSign();
-            feeder.setFeedCommand(shootCommand, rtValue, intakeDirectionSign);
+            // Note: feed command uses A as explicit shoot trigger and RT as feed intensity
+            shooter.setShootCommand(gamepad2.a);
+            feeder.setFeedCommand(/*shootActive=*/ gamepad2.a, /*rt=*/ gamepad2.right_trigger);
 
             shooter.update();
             feeder.update();
@@ -140,7 +136,6 @@ public class TeleOpMain extends LinearOpMode {
         shooter.stop();
         feeder.stop();
         intake.intakeOff();
-        crServos.stop();
     }
 
     /**
@@ -233,12 +228,7 @@ public class TeleOpMain extends LinearOpMode {
         telemetry.addLine("=== INTAKE/FEEDER ===");
         telemetry.addData("Intake Power", "%.2f", intake.getPower());
         telemetry.addData("Outtake Mode", intake.getPower() < 0 ? "ON" : "off");
-        telemetry.addData("Feeder Power", "%.2f", feeder.getPower());
-        telemetry.addLine();
-
-        telemetry.addLine("=== CR SERVOS ===");
-        telemetry.addData("Servo 1", crServos.isServo1Present() ? String.format("%.2f", crServos.getServo1Power()) : "NOT FOUND");
-        telemetry.addData("Servo 2", crServos.isServo2Present() ? String.format("%.2f", crServos.getServo2Power()) : "NOT FOUND");
+        telemetry.addData("Feeder Power", "%.2f", feeder.getFeederPower());
         telemetry.addLine();
 
         // Health warnings

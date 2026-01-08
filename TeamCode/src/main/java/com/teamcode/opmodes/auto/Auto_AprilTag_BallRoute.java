@@ -169,11 +169,17 @@ public class Auto_AprilTag_BallRoute extends LinearOpMode {
 
             // 3. TELEMETRY (rate-limited to 10Hz)
             long now = System.nanoTime();
-            if (now - lastTelemetryNs > TELEMETRY_INTERVAL_NS) {
+            long delta = now - lastTelemetryNs;
+            if (delta < 0) { // handle nanoTime overflow
+                lastTelemetryNs = now;
+                delta = 0;
+            }
+            if (delta > TELEMETRY_INTERVAL_NS) {
                 updateTelemetry();
 
-                // Track loop time
-                double loopMs = (now - loopStart) / 1e6;
+                // Track loop time (guard against negative values from nanoTime overflow)
+                long loopDelta = now - loopStart;
+                double loopMs = (loopDelta < 0) ? 0.0 : (loopDelta / 1e6);
                 telemetry.addData("Loop (ms)", "%.1f", loopMs);
 
                 telemetry.update();
@@ -396,9 +402,14 @@ public class Auto_AprilTag_BallRoute extends LinearOpMode {
         double errorDist = Math.hypot(targetPose.x - currentPose.x, targetPose.y - currentPose.y);
         telemetry.addData("Distance to Target", "%.1f in", errorDist);
 
-        // Update cached voltage every 500ms
+        // Update cached voltage every 500ms (overflow-safe)
         long now = System.nanoTime();
-        if (now - lastVoltageReadNs > 500_000_000L) {
+        long vdelta = now - lastVoltageReadNs;
+        if (vdelta < 0) {
+            lastVoltageReadNs = now;
+            vdelta = 0;
+        }
+        if (vdelta > 500_000_000L) {
             cachedVoltage = drive.getVoltage();
             lastVoltageReadNs = now;
         }

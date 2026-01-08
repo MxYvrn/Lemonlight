@@ -52,19 +52,30 @@ public class DriveSubsystem {
             module.setBulkCachingMode(LynxModule.BulkCachingMode.AUTO);
         }
 
-        frontLeft  = hw.get(DcMotorEx.class, "frontLeftMotor");
-        frontRight = hw.get(DcMotorEx.class, "frontRightMotor");
-        backLeft   = hw.get(DcMotorEx.class, "backLeftMotor");
-        backRight  = hw.get(DcMotorEx.class, "backRightMotor");
+        DcMotorEx fl = null, fr = null, bl = null, br = null;
+        try {
+            fl = hw.get(DcMotorEx.class, "FLMotor");
+            fr = hw.get(DcMotorEx.class, "FRMotor");
+            bl = hw.get(DcMotorEx.class, "BLMotor");
+            br = hw.get(DcMotorEx.class, "BRMotor");
 
-        // Standard mecanum motor directions
-        frontLeft.setDirection(DcMotorSimple.Direction.REVERSE);
-        backLeft.setDirection(DcMotorSimple.Direction.REVERSE);
-        frontRight.setDirection(DcMotorSimple.Direction.FORWARD);
-        backRight.setDirection(DcMotorSimple.Direction.FORWARD);
+            // Standard mecanum motor directions
+            fl.setDirection(DcMotorSimple.Direction.REVERSE);
+            bl.setDirection(DcMotorSimple.Direction.REVERSE);
+            fr.setDirection(DcMotorSimple.Direction.FORWARD);
+            br.setDirection(DcMotorSimple.Direction.FORWARD);
 
-        setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-        setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+            setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+            setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        } catch (Exception e) {
+            // One or more motors missing - operate in degraded mode where possible
+            // Individual methods guard for null motors before acting.
+        }
+
+        frontLeft = fl;
+        frontRight = fr;
+        backLeft = bl;
+        backRight = br;
     }
 
     /**
@@ -160,24 +171,24 @@ public class DriveSubsystem {
             }
         }
 
-        frontLeft.setPower(clamp(fl * voltageScale, -1.0, 1.0));
-        frontRight.setPower(clamp(fr * voltageScale, -1.0, 1.0));
-        backLeft.setPower(clamp(bl * voltageScale, -1.0, 1.0));
-        backRight.setPower(clamp(br * voltageScale, -1.0, 1.0));
+        if (frontLeft != null) frontLeft.setPower(clamp(fl * voltageScale, -1.0, 1.0));
+        if (frontRight != null) frontRight.setPower(clamp(fr * voltageScale, -1.0, 1.0));
+        if (backLeft != null) backLeft.setPower(clamp(bl * voltageScale, -1.0, 1.0));
+        if (backRight != null) backRight.setPower(clamp(br * voltageScale, -1.0, 1.0));
     }
 
     public void setMode(DcMotor.RunMode mode) {
-        frontLeft.setMode(mode);
-        frontRight.setMode(mode);
-        backLeft.setMode(mode);
-        backRight.setMode(mode);
+        if (frontLeft != null) frontLeft.setMode(mode);
+        if (frontRight != null) frontRight.setMode(mode);
+        if (backLeft != null) backLeft.setMode(mode);
+        if (backRight != null) backRight.setMode(mode);
     }
 
     public void setZeroPowerBehavior(DcMotor.ZeroPowerBehavior behavior) {
-        frontLeft.setZeroPowerBehavior(behavior);
-        frontRight.setZeroPowerBehavior(behavior);
-        backLeft.setZeroPowerBehavior(behavior);
-        backRight.setZeroPowerBehavior(behavior);
+        if (frontLeft != null) frontLeft.setZeroPowerBehavior(behavior);
+        if (frontRight != null) frontRight.setZeroPowerBehavior(behavior);
+        if (backLeft != null) backLeft.setZeroPowerBehavior(behavior);
+        if (backRight != null) backRight.setZeroPowerBehavior(behavior);
     }
 
     // Tuning methods

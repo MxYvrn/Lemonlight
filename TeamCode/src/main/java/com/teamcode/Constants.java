@@ -11,16 +11,16 @@ package com.teamcode;
  * EXPANSION HUB (Drive Motors - run without encoders):
  * ┌────────────────────────────────────────────────────────────────────────┐
  * │ Motors (DcMotorEx):                                                    │
- * │   Port 0: frontRightMotor - Mecanum drive (goBILDA 5203 series)       │
+ * │   Port 0: FRMotor - Mecanum drive (goBILDA 5203 series)       │
  * │            ↳ Encoder: Left odometry pod (REV Through Bore 8192 CPR)   │
- * │   Port 1: backRightMotor  - Mecanum drive (goBILDA 5203 series)       │
+ * │   Port 1: BRMotor  - Mecanum drive (goBILDA 5203 series)       │
  * │            ↳ Encoder: Right odometry pod (REV Through Bore 8192 CPR)  │
- * │   Port 2: frontLeftMotor  - Mecanum drive (goBILDA 5203 series)       │
+ * │   Port 2: FLMotor - Mecanum drive (goBILDA 5203 series)       │
  * │            ↳ Encoder: Strafe odometry pod (REV Through Bore 8192 CPR) │
- * │   Port 3: backLeftMotor   - Mecanum drive (goBILDA 5203 series)       │
+ * │   Port 3: BLMotor   - Mecanum drive (goBILDA 5203 series)       │
  * │                                                                        │
  * │   ⚠️ NOTE: Port 0 encoder contact is LOOSE - may affect accuracy!     │
- * │   ⚠️ CODE USES MOTOR NAMES to read encoders (e.g., "frontRightMotor") │
+ * │   ⚠️ CODE USES MOTOR NAMES to read encoders (e.g., "FRMotor") │
  * └────────────────────────────────────────────────────────────────────────┘
  *
  * CONTROL HUB (Manipulator Motors):
@@ -28,7 +28,7 @@ package com.teamcode;
  * │ Motors (DcMotorEx):                                                    │
  * │   Port 0: shooterMotor   - Shooter flywheel (goBILDA 5203 series)       │
  * │   Port 1: intakeMotor  - Intake roller (goBILDA 5203 series)          │
- * │   Port 2: indexMotor   - Feeder/indexer (goBILDA 5203 series)         │
+ * │   Port 2: FeederMotor   - Feeder/indexer (goBILDA 5203 series)         │
  * │                                                                        │
  * │ IMU:                                                                   │
  * │   I2C Bus 0: imu       - REV Internal IMU (BHI260AP)                  │
@@ -63,9 +63,9 @@ public final class Constants {
 
     // ========== HARDWARE DEVICE NAMES (must match Robot Configuration) ==========
     // Odometry encoders use the motor port names (encoders plugged into motor ports)
-    public static final String ENC_LEFT   = "frontRightMotor";  // Port 0 encoder
-    public static final String ENC_RIGHT  = "backRightMotor";   // Port 1 encoder
-    public static final String ENC_STRAFE = "frontLeftMotor";   // Port 2 encoder
+    public static final String ENC_LEFT   = "FRMotor";  // Port 0 encoder
+    public static final String ENC_RIGHT  = "BRMotor";   // Port 1 encoder
+    public static final String ENC_STRAFE = "FLMotor";   // Port 2 encoder
     public static final String IMU_NAME   = "imu";
 
     // Encoder configuration
@@ -196,11 +196,7 @@ public final class Constants {
 
     // ========== TELEOP HARDWARE ==========
     public static final String SHOOTER_MOTOR_NAME = "shootMotor";
-    public static final String FEEDER_MOTOR_NAME = "indexMotor";
-
-    // CR Servos (Continuous Rotation)
-    public static final String CR_SERVO_1_NAME = "left_Roller";
-    public static final String CR_SERVO_2_NAME = "right_Roller";
+    public static final String FEEDER_MOTOR_NAME = "FeederMotor";
 
     // ========== SHOOTER CONFIGURATION ==========
     // Flywheel speeds in RPM
@@ -209,16 +205,17 @@ public final class Constants {
     public static final double SHOOTER_SPEED_MEDIUM = 1700.0;   // RPM (medium distance) - MEASURED
     public static final double SHOOTER_SPEED_MAX = 2000.0;      // RPM (long distance shots) - MEASURED
 
-    // Convert RPM to encoder ticks/sec
+    // Convert RPM to encoder velocity (encoder units per second)
     // NOTE: Verify your motor type and update SHOOTER_TICKS_PER_REV accordingly:
     //   - goBILDA 5202 series: 537.7 PPR
     //   - goBILDA 5203 series: 384.5 PPR
     //   - REV HD Hex Motor: 2240 CPR
     // For testing an encoder CPR mismatch, set to the alternate common value below.
     public static final double SHOOTER_TICKS_PER_REV = 537.7;  // goBILDA 5202 series (try if 384.5 produced wrong RPM)
-    // BUGFIX: Divide by 60 to convert RPM (revolutions per minute) to ticks per second
-    // Formula: RPM * ticks_per_rev / 60 = ticks_per_second
-    public static final double SHOOTER_RPM_TO_TPS = SHOOTER_TICKS_PER_REV / 60.0;
+    // BUGFIX: Divide by 60 to convert RPM (revolutions per minute) to encoder velocity
+    // Formula: RPM * ticks_per_rev / 60 = encoder_velocity (encoder units per second)
+    // This converts RPM to the encoder velocity units required by the motor controller
+    public static final double SHOOTER_ENCODER_VELOCITY_PER_RPM = SHOOTER_TICKS_PER_REV / 60.0;
 
     // PIDF gains for shooter velocity control (tune on actual hardware)
     public static final double SHOOTER_KP = 5.0;

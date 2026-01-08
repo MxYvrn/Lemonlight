@@ -8,7 +8,7 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 
 /**
  * Simple intake subsystem for ball collection.
- * Controls a single motor or roller mechanism.
+ * Controls a single motor or roller mechanism.  ((supposed to contol two motors!!!))
  * Gracefully handles missing motor (intake disconnected/misconfigured).
  * Supports outtake toggle mode for TeleOp.
  */
