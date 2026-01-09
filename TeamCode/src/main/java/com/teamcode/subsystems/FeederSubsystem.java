@@ -117,8 +117,9 @@ public class FeederSubsystem {
         }
 
         // Feeder only controls the feeder motor; intake motor is controlled by IntakeSubsystem.
+        // FIXED: Negate power to reverse motor direction (feeder was running opposite)
         if (feederMotor != null) {
-            feederMotor.setPower(feederPower);
+            feederMotor.setPower(-feederPower);
         }
         feederPowerCache = feederPower;
     }

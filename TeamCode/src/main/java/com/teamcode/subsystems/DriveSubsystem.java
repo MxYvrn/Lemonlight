@@ -43,7 +43,7 @@ public class DriveSubsystem {
 
         // Initialize voltage sensor for compensation
         // BUGFIX: Store iterator to avoid creating separate iterators
-        var voltageIterator = hw.voltageSensor.iterator();
+        java.util.Iterator<com.qualcomm.robotcore.hardware.VoltageSensor> voltageIterator = hw.voltageSensor.iterator();
         voltageSensor = voltageIterator.hasNext() ? voltageIterator.next() : null;
 
         // Enable bulk caching for all hubs
