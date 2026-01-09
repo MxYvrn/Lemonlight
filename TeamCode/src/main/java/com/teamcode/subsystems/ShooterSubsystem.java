@@ -126,6 +126,50 @@ public class ShooterSubsystem {
     }
 
     /**
+     * Get diagnostic data for telemetry debugging.
+     * Returns encoder velocity and RPM calculations for troubleshooting.
+     */
+    public DiagnosticData getDiagnosticData() {
+        if (shooterMotor == null) {
+            return new DiagnosticData(0.0, 0.0, 0.0, 0.0, 0.0);
+        }
+        double actualEncoderVelocity = Math.abs(shooterMotor.getVelocity());
+        double targetEncoderVelocity = targetVelocityRPM * Constants.SHOOTER_ENCODER_VELOCITY_PER_RPM;
+        double calculatedRPM = actualEncoderVelocity / Constants.SHOOTER_ENCODER_VELOCITY_PER_RPM;
+        // Compare with old wrong value (5202 ticks) for diagnostic purposes
+        double rpmWithOldWrongTicks = actualEncoderVelocity / (537.7 / 60.0);
+        double encoderVelocityError = targetEncoderVelocity - actualEncoderVelocity;
+        
+        return new DiagnosticData(
+            targetEncoderVelocity,
+            actualEncoderVelocity,
+            encoderVelocityError,
+            calculatedRPM,
+            rpmWithOldWrongTicks
+        );
+    }
+
+    /**
+     * Diagnostic data container for telemetry.
+     */
+    public static class DiagnosticData {
+        public final double targetEncoderVelocity;
+        public final double actualEncoderVelocity;
+        public final double encoderVelocityError;
+        public final double calculatedRPM;
+        public final double rpmWithOldWrongTicks; // For comparison - shows what RPM would be with wrong encoder config
+
+        public DiagnosticData(double targetEncVel, double actualEncVel, double encVelError, 
+                            double calcRPM, double rpmOldWrong) {
+            this.targetEncoderVelocity = targetEncVel;
+            this.actualEncoderVelocity = actualEncVel;
+            this.encoderVelocityError = encVelError;
+            this.calculatedRPM = calcRPM;
+            this.rpmWithOldWrongTicks = rpmOldWrong;
+        }
+    }
+
+    /**
      * Get current speed mode.
      */
     public SpeedMode getSpeedMode() {

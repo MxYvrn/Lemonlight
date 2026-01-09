@@ -241,6 +241,18 @@ public class TeleOpMain extends LinearOpMode {
         telemetry.addData("Error RPM", "%.0f", errorRPM);
         telemetry.addData("At Speed", atSpeed ? "YES" : "NO");
         telemetry.addData("Shooting", shooting ? "ACTIVE" : "idle");
+        
+        // Diagnostic data for encoder mismatch debugging
+        ShooterSubsystem.DiagnosticData diag = shooter.getDiagnosticData();
+        telemetry.addLine();
+        telemetry.addLine("--- DEBUG: Encoder Diagnostics ---");
+        telemetry.addData("Ticks/Rev (config)", "%.1f", Constants.SHOOTER_TICKS_PER_REV);
+        telemetry.addData("Target Enc Vel", "%.1f", diag.targetEncoderVelocity);
+        telemetry.addData("Actual Enc Vel", "%.1f", diag.actualEncoderVelocity);
+        telemetry.addData("Enc Vel Error", "%.1f", diag.encoderVelocityError);
+        telemetry.addData("RPM (correct)", "%.0f", diag.calculatedRPM);
+        telemetry.addData("RPM (if 5202)", "%.0f", diag.rpmWithOldWrongTicks);
+        telemetry.addData("Diff (5202-5203)", "%.0f", diag.rpmWithOldWrongTicks - diag.calculatedRPM);
         telemetry.addLine();
 
         telemetry.addLine("=== INTAKE/FEEDER ===");

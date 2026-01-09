@@ -129,3 +129,81 @@ Note: Some names start with "Team" and others start with "team".  This is intent
 5)  Add:    include ':Team0417' to the "/settings.gradle" file.
     
 6)  Open up Android Studios and clean out any old files by using the menu to "Build/Clean Project""
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Artin:
+
+Test Procedure
+Deploy code to robot
+Start TeleOp Main
+Watch telemetry on Driver Station
+Test all three speeds (X/Y/B buttons)
+Observe the debug section values
+Verify Error RPM is small and At Speed shows YES when motor stabilizes
+The telemetry updates every 100ms, so you'll see real-time diagnostics on the Driver Station screen.

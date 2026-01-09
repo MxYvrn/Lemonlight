@@ -210,8 +210,8 @@ public final class Constants {
     //   - goBILDA 5202 series: 537.7 PPR
     //   - goBILDA 5203 series: 384.5 PPR
     //   - REV HD Hex Motor: 2240 CPR
-    // For testing an encoder CPR mismatch, set to the alternate common value below.
-    public static final double SHOOTER_TICKS_PER_REV = 537.7;  // goBILDA 5202 series (try if 384.5 produced wrong RPM)
+    // FIXED: Changed from 5202 (537.7) to 5203 (384.5) to match actual motor hardware
+    public static final double SHOOTER_TICKS_PER_REV = 384.5;  // goBILDA 5203 series (CORRECTED)
     // BUGFIX: Divide by 60 to convert RPM (revolutions per minute) to encoder velocity
     // Formula: RPM * ticks_per_rev / 60 = encoder_velocity (encoder units per second)
     // This converts RPM to the encoder velocity units required by the motor controller
