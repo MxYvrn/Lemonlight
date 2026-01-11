@@ -201,9 +201,9 @@ public final class Constants {
     // ========== SHOOTER CONFIGURATION ==========
     // Flywheel speeds in RPM
     // UPDATED to match measured values from hardware testing
-    public static final double SHOOTER_SPEED_LOW = 1100.0;      // RPM (idle/close shots) - MEASURED
-    public static final double SHOOTER_SPEED_MEDIUM = 1700.0;   // RPM (medium distance) - MEASURED
-    public static final double SHOOTER_SPEED_MAX = 2000.0;      // RPM (long distance shots) - MEASURED
+    public static final double SHOOTER_SPEED_LOW = 75.0;      // RPM (idle/close shots) - MEASURED
+    public static final double SHOOTER_SPEED_MEDIUM = 285.0;   // RPM (medium distance) - MEASURED
+    public static final double SHOOTER_SPEED_MAX = 500.0;      // RPM (long distance shots) - MEASURED
 
     // Convert RPM to encoder velocity (encoder units per second)
     // NOTE: Verify your motor type and update SHOOTER_TICKS_PER_REV accordingly:
@@ -225,7 +225,32 @@ public final class Constants {
     public static final double SHOOTER_KF = 1.0;  // Feedforward (lowered from 12.0)
 
     // Shooter tolerance for "at speed" detection
-    public static final double SHOOTER_VELOCITY_TOLERANCE_RPM = 50.0; // within 50 RPM = ready
+    // For low RPM targets, use percentage-based tolerance; for high RPM, use fixed value
+    public static final double SHOOTER_VELOCITY_TOLERANCE_RPM = 50.0; // Fixed tolerance (RPM)
+    public static final double SHOOTER_VELOCITY_TOLERANCE_PERCENT = 0.10; // 10% tolerance for low RPM targets
+    public static final double SHOOTER_TOLERANCE_SWITCH_RPM = 500.0; // Below this, use percentage; above, use fixed
+
+    // ========== SHOOTER SPIN-UP TUNING (adds faster ramp to target) ==========
+
+    // Spin-up detection: use adaptive threshold
+    // For low RPM targets, use percentage of target; for high RPM, use fixed threshold
+    public static final double SHOOTER_SPINUP_ERROR_RPM = 250.0; // Fixed threshold for high RPM
+    public static final double SHOOTER_SPINUP_ERROR_PERCENT = 0.50; // 50% of target for low RPM
+    public static final double SHOOTER_SPINUP_SWITCH_RPM = 500.0; // Below this, use percentage; above, use fixed
+
+    // Aggressive PIDF during spin-up (start here, tune carefully)
+    // Tip: KI is usually 0 for flywheel velocity; integral can hurt response.
+    public static final double SHOOTER_KP_SPINUP = 10.0;
+    public static final double SHOOTER_KI_SPINUP = 0.0;
+    public static final double SHOOTER_KD_SPINUP = 0.0;
+    public static final double SHOOTER_KF_SPINUP = 1.2;  // slightly higher feedforward
+
+    // Optional acceleration feedforward (encoder-velocity units per second^2 scaled to power-ish)
+    // Start at 0.0 if unsure, then increase slowly.
+    public static final double SHOOTER_KA = 0.0;
+
+    // Safety: cap commanded encoder velocity to avoid insane spikes
+    public static final double SHOOTER_MAX_ENCODER_VELOCITY = 99999.0;
 
     // ========== FEEDER (M4) CONFIGURATION ==========
     public static final double FEEDER_SHOOT_POWER = 0.5;  // Half speed during shooting

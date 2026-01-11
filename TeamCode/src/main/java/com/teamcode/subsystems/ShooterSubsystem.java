@@ -2,7 +2,6 @@ package com.teamcode.subsystems;
 
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
-import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.teamcode.Constants;
 
@@ -26,6 +25,10 @@ public class ShooterSubsystem {
     // Cached target velocity (RPM)
     private double targetVelocityRPM = 0.0;
 
+    // --- Added fields for spin-up assist ---
+    private double lastTargetEncoderVelocityCmd = 0.0;
+    private long lastUpdateNanos = 0;
+
     public ShooterSubsystem(HardwareMap hw) {
         DcMotorEx sm = null;
         try {
@@ -35,6 +38,8 @@ public class ShooterSubsystem {
             sm.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
             sm.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
             sm.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT); // Coast for flywheel
+            // Note: Motor direction should be set in Robot Configuration if needed
+            // If motor spins backwards, either reverse in config or add: sm.setDirection(DcMotorSimple.Direction.REVERSE);
 
             // Set PIDF for velocity control
             sm.setVelocityPIDFCoefficients(
@@ -58,8 +63,13 @@ public class ShooterSubsystem {
      * Shooter will idle at this speed.
      */
     public void setSpeedMode(SpeedMode mode) {
+        if (mode == null) return; // Safety check - ignore null mode
         currentMode = mode;
         setTargetSpeed(mode);
+        // Update lastTargetEncoderVelocityCmd to prevent acceleration feedforward spikes
+        // when speed mode changes (especially if called while disabled)
+        double newTargetEncoderVelocity = targetVelocityRPM * Constants.SHOOTER_ENCODER_VELOCITY_PER_RPM;
+        lastTargetEncoderVelocityCmd = newTargetEncoderVelocity;
     }
 
     /**
@@ -75,17 +85,103 @@ public class ShooterSubsystem {
      **/
     
     public void update() {
+        // Always update timing state to prevent huge dt spikes when re-enabled
+        long now = System.nanoTime();
+        double dt = 0.0;
+        if (lastUpdateNanos != 0) {
+            long delta = now - lastUpdateNanos;
+            // Handle System.nanoTime() overflow (happens every ~292 years, but be safe)
+            if (delta < 0) {
+                // Overflow occurred - reset timing
+                lastUpdateNanos = now;
+                delta = 0;
+            }
+            dt = delta / 1e9;
+        }
+        // Cap dt to prevent huge acceleration feedforward spikes (max 0.1s)
+        if (dt > 0.1) dt = 0.0; // Treat as first update if dt is too large
+        lastUpdateNanos = now;
+
         if (!shooterEnabled) {
             if (shooterMotor != null) shooterMotor.setPower(0.0);
+            // Update lastTargetEncoderVelocityCmd to prevent spikes on re-enable
+            double targetEncoderVelocity = targetVelocityRPM * Constants.SHOOTER_ENCODER_VELOCITY_PER_RPM;
+            lastTargetEncoderVelocityCmd = targetEncoderVelocity;
+            lastTargetEncoderVelocity = targetEncoderVelocity;
             return;
         }
-        // Convert target RPM to encoder velocity for the motor controller
+
+        // Convert target RPM -> encoder velocity
         double targetEncoderVelocity = targetVelocityRPM * Constants.SHOOTER_ENCODER_VELOCITY_PER_RPM;
         lastTargetEncoderVelocity = targetEncoderVelocity;
-        if (shooterMotor != null) {
-            // Velocity control is handled by DcMotorEx internally via PIDF
-            shooterMotor.setVelocity(targetEncoderVelocity);
+
+        if (shooterMotor == null) {
+            // Update lastTargetEncoderVelocityCmd even when motor is null
+            lastTargetEncoderVelocityCmd = targetEncoderVelocity;
+            return;
         }
+
+        // Current RPM for error computation
+        double currentRPM = getVelocityRPM();
+        double errorRPM = targetVelocityRPM - currentRPM;
+
+        // --- Spin-up detection (adaptive threshold for low RPM targets) ---
+        // Use percentage-based threshold for low RPM, fixed threshold for high RPM
+        double spinupThreshold;
+        if (targetVelocityRPM <= 0.0) {
+            // Target is zero or negative - no spin-up needed
+            spinupThreshold = 0.0;
+        } else if (targetVelocityRPM < Constants.SHOOTER_SPINUP_SWITCH_RPM) {
+            // Low RPM: use percentage of target (e.g., 50% of 75 RPM = 37.5 RPM threshold)
+            spinupThreshold = targetVelocityRPM * Constants.SHOOTER_SPINUP_ERROR_PERCENT;
+            // Minimum threshold of 10 RPM to ensure spin-up works even for very low targets
+            spinupThreshold = Math.max(spinupThreshold, 10.0);
+        } else {
+            // High RPM: use fixed threshold
+            spinupThreshold = Constants.SHOOTER_SPINUP_ERROR_RPM;
+        }
+        boolean spinup = Math.abs(errorRPM) > spinupThreshold;
+
+        // Swap PIDF based on spin-up vs steady-state
+        // NOTE: Setting PIDF every loop is usually fine, but if your SDK/hardware jitters,
+        // you can gate it (only set when spinup state changes). This is minimal and safe.
+        if (spinup) {
+            shooterMotor.setVelocityPIDFCoefficients(
+                Constants.SHOOTER_KP_SPINUP,
+                Constants.SHOOTER_KI_SPINUP,
+                Constants.SHOOTER_KD_SPINUP,
+                Constants.SHOOTER_KF_SPINUP
+            );
+        } else {
+            shooterMotor.setVelocityPIDFCoefficients(
+                Constants.SHOOTER_KP,
+                Constants.SHOOTER_KI,
+                Constants.SHOOTER_KD,
+                Constants.SHOOTER_KF
+            );
+        }
+
+        // Optional acceleration feedforward to help jump to speed faster:
+        // cmd = targetEncVel + kA * (d/dt targetEncVel)
+        double accelFF = 0.0;
+        if (dt > 1e-4 && dt <= 0.1 && Constants.SHOOTER_KA != 0.0) {
+            double dTarget = (targetEncoderVelocity - lastTargetEncoderVelocityCmd) / dt;
+            accelFF = Constants.SHOOTER_KA * dTarget;
+        }
+
+        double cmd = targetEncoderVelocity + accelFF;
+
+        // Safety clamp
+        cmd = Math.max(-Constants.SHOOTER_MAX_ENCODER_VELOCITY,
+              Math.min(Constants.SHOOTER_MAX_ENCODER_VELOCITY, cmd));
+
+        lastTargetEncoderVelocityCmd = targetEncoderVelocity;
+
+        // Note: setVelocity() expects encoder velocity in encoder units per second
+        // The sign of cmd determines direction: positive = forward, negative = reverse
+        // For shooter flywheel, typically only forward rotation is needed
+        // If motor spins backwards with positive values, set direction in Robot Configuration
+        shooterMotor.setVelocity(cmd);
     }
 
     /**
@@ -95,6 +191,13 @@ public class ShooterSubsystem {
         shooterEnabled = enabled;
         if (!enabled) {
             if (shooterMotor != null) shooterMotor.setPower(0.0);
+            // Reset timing state to prevent huge dt spike when re-enabled
+            lastUpdateNanos = 0;
+            lastTargetEncoderVelocityCmd = targetVelocityRPM * Constants.SHOOTER_ENCODER_VELOCITY_PER_RPM;
+        } else {
+            // When enabling, reset timing state to prevent issues if it was disabled for a long time
+            lastUpdateNanos = 0;
+            // Keep lastTargetEncoderVelocityCmd as-is (already set correctly by setSpeedMode or previous state)
         }
     }
 
@@ -108,11 +211,31 @@ public class ShooterSubsystem {
 
     /**
      * Check if shooter is at target speed (within tolerance).
+     * Uses adaptive tolerance: percentage-based for low RPM, fixed for high RPM.
      */
     public boolean isAtSpeed() {
         double currentRPM = getVelocityRPM();
-        double targetRPM = currentMode.rpm;
-        return Math.abs(currentRPM - targetRPM) < Constants.SHOOTER_VELOCITY_TOLERANCE_RPM;
+        double targetRPM = targetVelocityRPM;
+        
+        // Handle zero/negative target as special case
+        if (targetRPM <= 0.0) {
+            // If target is zero, consider "at speed" if current is also near zero
+            return Math.abs(currentRPM) < 5.0;
+        }
+        
+        // Adaptive tolerance: percentage for low RPM, fixed for high RPM
+        double tolerance;
+        if (targetRPM < Constants.SHOOTER_TOLERANCE_SWITCH_RPM) {
+            // Low RPM: use percentage of target (e.g., 10% of 75 RPM = 7.5 RPM tolerance)
+            tolerance = targetRPM * Constants.SHOOTER_VELOCITY_TOLERANCE_PERCENT;
+            // Minimum tolerance of 5 RPM to avoid being too strict
+            tolerance = Math.max(tolerance, 5.0);
+        } else {
+            // High RPM: use fixed tolerance
+            tolerance = Constants.SHOOTER_VELOCITY_TOLERANCE_RPM;
+        }
+        
+        return Math.abs(currentRPM - targetRPM) < tolerance;
     }
 
     /**
@@ -178,9 +301,10 @@ public class ShooterSubsystem {
 
     /**
      * Get target RPM for current mode.
+     * Returns the actual target velocity (targetVelocityRPM) for consistency with isAtSpeed().
      */
     public double getTargetRPM() {
-        return currentMode.rpm;
+        return targetVelocityRPM;
     }
 
     /**
@@ -203,5 +327,8 @@ public class ShooterSubsystem {
         if (shooterMotor != null) shooterMotor.setPower(0.0);
         targetVelocityRPM = 0.0;
         shootCommandActive = false;
+        // Reset timing state to prevent issues on restart
+        lastUpdateNanos = 0;
+        lastTargetEncoderVelocityCmd = 0.0;
     }
 }
