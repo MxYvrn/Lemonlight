@@ -4,12 +4,40 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.I2cAddr;
 import com.qualcomm.robotcore.hardware.I2cDevice;
 
-
+import org.firstinspires.ftc.robotcore.external.Telemetry;
 
 public class GroveVisionI2CHelper {
+
+    public static Lemonlight bindLemonlight(HardwareMap hardwareMap, Telemetry telemetry) {
+        return bindLemonlight(hardwareMap, telemetry, LemonlightConstants.CONFIG_DEVICE_NAME);
+    }
+
+    public static Lemonlight bindLemonlight(HardwareMap hardwareMap, Telemetry telemetry, String deviceName) {
+        telemetry.addLine("Binding I2C device '" + deviceName + "'...");
+        telemetry.update();
+        
+        // init-1 (Tron:Ares)
+        Lemonlight lemonlight = null;
+        try {
+            lemonlight = hardwareMap.get(Lemonlight.class, deviceName);
+        } catch (Exception e) {
+            lemonlight = null;
+        }
+        
+        // checking whether lemon is there
+        if (lemonlight == null) {
+            telemetry.addLine("ACTIVE Robot Configuration does not include an I2C device named 'lemonlight'.");
+            telemetry.addData("Error", "Add an I2C device, type 'Lemonlight (Grove Vision AI V2)', name: " + deviceName);
+            telemetry.update();
+            return null;
+        }
+        // init-2 (Tron:Ares)
+        lemonlight.initialize();
+        return lemonlight;
+    }
     
     
-    /** Default I2C 7-bit address for Grove Vision AI V2 */
+    // Default I2C 7-bit address for Grove Vision AI V2
     private static final int DEFAULT_I2C_ADDRESS = 0x62;
     
     private final I2cDevice device;
@@ -21,7 +49,7 @@ public class GroveVisionI2CHelper {
         this(hardwareMap, deviceName, DEFAULT_I2C_ADDRESS);
     }
 
-    // Constructor with custom I2C address
+    // Constructor with custom I2C address (unnecssary 4 now)
     public GroveVisionI2CHelper(HardwareMap hardwareMap, String deviceName, int i2cAddress) {
             device = hardwareMap.get(I2cDevice.class, deviceName);
             i2cAddr = I2cAddr.create7bit(i2cAddress);
@@ -63,11 +91,6 @@ public class GroveVisionI2CHelper {
     //reads multiple bytes from register
     @SuppressWarnings("deprecation")
     public byte[] read(int register, int length) {
-        
-        // check if device is initialized
-        if (!initialized) {
-            throw new IllegalStateException("I2C device not initialized");
-        }
 
         device.enableI2cReadMode(i2cAddr, register, length);
         device.readI2cCacheFromModule();
@@ -77,7 +100,7 @@ public class GroveVisionI2CHelper {
         return result;
     }
 
-    //reads and writes aka combination of above functions
+    //reads and writes aka combination of above functions above
     public byte[] writeRead(int commandRegister, byte commandByte, int readRegister, int readLength) {
         
         if (!initialized) {

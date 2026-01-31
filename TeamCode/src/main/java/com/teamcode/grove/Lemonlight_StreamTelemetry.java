@@ -22,23 +22,11 @@ public class Lemonlight_StreamTelemetry extends LinearOpMode {
 
     @Override
     public void runOpMode() throws InterruptedException {
-        telemetry.addLine("Binding '" + DEVICE_NAME + "'...");
-        telemetry.update();
-
-        try {
-            lemonlight = hardwareMap.get(Lemonlight.class, DEVICE_NAME);
-        } catch (Exception e) {
-            lemonlight = null;
-        }
-
+        lemonlight = GroveVisionI2CHelper.bindLemonlight(hardwareMap, telemetry);
         if (lemonlight == null) {
-            telemetry.addLine("ACTIVE Robot Configuration does not include an I2C device named 'lemonlight'.");
-            telemetry.update();
             sleep(5000);
             return;
         }
-
-        lemonlight.initialize();
         sensorWrapper = new LemonlightSensor(lemonlight);
 
         telemetry.addLine("Ready. Press START for stream.");
@@ -64,7 +52,9 @@ public class Lemonlight_StreamTelemetry extends LinearOpMode {
             telemetry.addLine("=== Lemonlight stream ===");
             telemetry.addData("Loop ms", loopElapsed);
             telemetry.addData("Inference age ms", inferenceAge >= 0 ? inferenceAge : "n/a");
-            
+            if (lemonlight.getLastError() != null) {
+                telemetry.addData("Last error", lemonlight.getLastError());
+            }
             if (result != null) {
                 telemetry.addData("Detections", result.getDetectionCount());
                 telemetry.addData("Top score %", result.getTopScorePercent());

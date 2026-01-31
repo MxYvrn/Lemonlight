@@ -6,7 +6,6 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 /**
  * One-shot test for Lemonlight (Grove Vision AI V2): binds driver, shows init status, performs one read and displays parsed + raw hex.
  */
-
 @TeleOp(name = "GroveVisionI2C_OneShotTest", group = "Test")
 public class GroveVisionI2C_OneShotTest extends LinearOpMode {
 
@@ -19,28 +18,17 @@ public class GroveVisionI2C_OneShotTest extends LinearOpMode {
 
     @Override
     public void runOpMode() throws InterruptedException {
-        telemetry.addLine("Binding I2C device '" + DEVICE_NAME + "'...");
-        telemetry.update();
-
-        try {
-            lemonlight = hardwareMap.get(Lemonlight.class, DEVICE_NAME);
-        } catch (Exception e) {
-            lemonlight = null;
-        }
-
+        lemonlight = GroveVisionI2CHelper.bindLemonlight(hardwareMap, telemetry);
         if (lemonlight == null) {
-            telemetry.addLine("ACTIVE Robot Configuration does not include an I2C device named 'lemonlight'.");
-            telemetry.addData("Error", "Add an I2C device, type 'Lemonlight (Grove Vision AI V2)', name: " + DEVICE_NAME);
-            telemetry.update();
             sleep(5000);
             return;
         }
-
-        lemonlight.initialize();
         boolean initOk = lemonlight.ping();
+        String fwVer = lemonlight.getFirmwareVersion();
 
         telemetry.addLine(initOk ? "Driver initialized" : "Driver init failed");
         telemetry.addData("Address", "0x%02X", LemonlightConstants.I2C_ADDRESS_7BIT);
+        telemetry.addData("Firmware", fwVer != null && !fwVer.isEmpty() ? fwVer : "n/a");
         if (lemonlight.getLastError() != null) {
             telemetry.addData("Last error", lemonlight.getLastError());
         }
@@ -72,13 +60,10 @@ public class GroveVisionI2C_OneShotTest extends LinearOpMode {
         for (int attempt = 1; attempt <= MAX_RETRIES && opModeIsActive(); attempt++) {
             try {
                 sleep(WRITE_TO_READ_DELAY_MS);
-                byte[] raw = lemonlight.readFrameRaw(LemonlightConstants.MAX_READ_LEN);
-                if (raw != null && raw.length > 0) {
-                    displayResponse(raw);
-                    LemonlightResult result = lemonlight.readInference();
-                    if (result != null) {
-                        telemetry.addLine("Parsed: count=" + result.getDetectionCount() + " topScore=" + result.getTopScorePercent() + "%");
-                    }
+                LemonlightResult result = lemonlight.readInference();
+                if (result != null && result.isValid()) {
+                    displayResponse(result.getRaw());
+                    telemetry.addLine("Parsed: count=" + result.getDetectionCount() + " topScore=" + result.getTopScorePercent() + "%");
                     return true;
                 }
             } catch (Exception e) {

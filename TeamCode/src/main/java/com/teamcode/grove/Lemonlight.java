@@ -15,16 +15,23 @@ public class Lemonlight extends I2cDeviceSynchDevice<I2cDeviceSynch> {
 
     private static final int REG = LemonlightConstants.REG_CMD_RESP;
     private static final int HEADER_LEN = LemonlightConstants.HEADER_LEN;
-    private static final int CMD_HEADER_HI = LemonlightConstants.CMD_HEADER_HI;
-    private static final int CMD_HEADER_LO = LemonlightConstants.CMD_HEADER_LO;
+    private static final int CMD_HEADER = LemonlightConstants.CMD_HEADER;
 
     private String lastError;
+    private String invokeCommand;
+    private final byte[] packetScratch;
 
     public Lemonlight(I2cDeviceSynch deviceClient, boolean deviceClientIsOwned) {
         super(deviceClient, deviceClientIsOwned);
         this.deviceClient.setI2cAddress(LemonlightConstants.I2C_ADDR);
         super.registerArmingStateCallback(false);
         this.deviceClient.engage();
+        this.invokeCommand = LemonlightConstants.DEFAULT_INVOKE_CMD;
+        this.packetScratch = new byte[HEADER_LEN + LemonlightConstants.MAX_FRAME_LEN];
+    }
+
+    public void setInvokeCommand(String cmd) {
+        this.invokeCommand = cmd != null ? cmd : LemonlightConstants.DEFAULT_INVOKE_CMD;
     }
 
     @Override
@@ -35,12 +42,10 @@ public class Lemonlight extends I2cDeviceSynchDevice<I2cDeviceSynch> {
     @Override
     protected synchronized boolean doInitialize() {
         lastError = null;
-        
         if (!ping()) {
             lastError = "ping failed";
             return false;
         }
-        
         return true;
     }
 
@@ -54,14 +59,14 @@ public class Lemonlight extends I2cDeviceSynchDevice<I2cDeviceSynch> {
     }
 
     public boolean ping() {
-        byte[] resp = sendCommand(LemonlightConstants.AT_STAT, LemonlightConstants.PING_READ_LEN);
+        byte[] resp = writePayloadThenRead(LemonlightConstants.AT_STAT, LemonlightConstants.PING_READ_LEN, 300);
         if (resp == null || resp.length < HEADER_LEN) return false;
-        if ((resp[0] & 0xFF) != CMD_HEADER_HI || (resp[1] & 0xFF) != CMD_HEADER_LO) return false;
+        if ((resp[0] & 0xFF) != CMD_HEADER) return false;
         return true;
     }
 
     public String getFirmwareVersion() {
-        byte[] resp = sendCommand(LemonlightConstants.AT_VER, LemonlightConstants.MAX_READ_LEN);
+        byte[] resp = writePayloadThenRead(LemonlightConstants.AT_VER, LemonlightConstants.MAX_READ_LEN, 500);
         if (resp == null || resp.length <= HEADER_LEN) return "";
         int len = ((resp[2] & 0xFF) << 8) | (resp[3] & 0xFF);
         if (len <= 0 || HEADER_LEN + len > resp.length) return "";
@@ -75,24 +80,161 @@ public class Lemonlight extends I2cDeviceSynchDevice<I2cDeviceSynch> {
         return raw.length() > 0 ? raw : "";
     }
 
+    public void resetBuffer() {
+        packetScratch[0] = (byte) CMD_HEADER;
+        packetScratch[1] = (byte) LemonlightConstants.CMD_RESET;
+        packetScratch[2] = 0;
+        packetScratch[3] = 0;
+        writeRaw(packetScratch, HEADER_LEN);
+    }
+
+    public int availBytes() {
+        packetScratch[0] = (byte) CMD_HEADER;
+        packetScratch[1] = (byte) LemonlightConstants.CMD_AVAIL;
+        packetScratch[2] = 0;
+        packetScratch[3] = 0;
+        writeRaw(packetScratch, HEADER_LEN);
+        try {
+            Thread.sleep(10);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            lastError = "interrupted";
+            return -1;
+        }
+        byte[] resp = readRaw(8);
+        if (resp == null || resp.length < 6) return -1;
+        if ((resp[0] & 0xFF) != CMD_HEADER) return -1;
+        return ((resp[4] & 0xFF) << 8) | (resp[5] & 0xFF);
+    }
+
+    public byte[] readExact(int length) {
+        int readLen = Math.min(length, LemonlightConstants.MAX_READ_LEN);
+        packetScratch[0] = (byte) CMD_HEADER;
+        packetScratch[1] = (byte) LemonlightConstants.CMD_READ;
+        packetScratch[2] = (byte) (readLen >> 8);
+        packetScratch[3] = (byte) (readLen & 0xFF);
+        writeRaw(packetScratch, HEADER_LEN);
+        try {
+            Thread.sleep(15);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            lastError = "interrupted";
+            return null;
+        }
+        byte[] resp = readRaw(HEADER_LEN + readLen);
+        if (resp == null || resp.length < HEADER_LEN) {
+            lastError = "short read";
+            return null;
+        }
+        if ((resp[0] & 0xFF) != CMD_HEADER || (resp[1] & 0xFF) != LemonlightConstants.CMD_READ) {
+            lastError = "bad header";
+            return null;
+        }
+        int declaredLen = ((resp[2] & 0xFF) << 8) | (resp[3] & 0xFF);
+        int copy = Math.min(declaredLen, resp.length - HEADER_LEN);
+        if (copy <= 0) return new byte[0];
+        byte[] out = new byte[copy];
+        System.arraycopy(resp, HEADER_LEN, out, 0, copy);
+        return out;
+    }
+
+    public byte[] readMessageWithTimeout(int maxLen, long timeoutMs) {
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        int avail;
+        while ((avail = availBytes()) <= 0 && System.currentTimeMillis() < deadline) {
+            try {
+                Thread.sleep(LemonlightConstants.AVAIL_POLL_MS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                lastError = "interrupted";
+                return null;
+            }
+        }
+        if (avail <= 0) {
+            lastError = "timeout waiting for AVAIL";
+            return null;
+        }
+        int readLen = Math.min(avail, Math.min(maxLen, LemonlightConstants.MAX_READ_LEN));
+        return readExact(readLen);
+    }
+
+    public void invokeOnce() {
+        resetBuffer();
+        byte[] cmdBytes = invokeCommand.getBytes(StandardCharsets.US_ASCII);
+        writePayload(cmdBytes);
+    }
+
     public byte[] readFrameRaw(int maxLen) {
-        byte[] resp = sendCommand(LemonlightConstants.AT_ID, Math.min(maxLen, LemonlightConstants.MAX_READ_LEN));
-        if (resp == null || resp.length == 0) return new byte[0];
-        return resp;
+        return readMessageWithTimeout(maxLen, LemonlightConstants.READ_TIMEOUT_MS);
     }
 
     public LemonlightResult readInference() {
-        byte[] raw = readFrameRaw(LemonlightConstants.MAX_READ_LEN);
+        lastError = null;
+        invokeOnce();
+        byte[] raw = readMessageWithTimeout(LemonlightConstants.MAX_READ_LEN, LemonlightConstants.INVOKE_TIMEOUT_MS);
         long ts = System.currentTimeMillis();
         boolean valid = raw != null && raw.length > 0;
         int count = 0;
         List<LemonlightResult.Detection> dets = new ArrayList<>();
         if (valid) {
-            int payloadStart = (raw.length >= HEADER_LEN && (raw[0] & 0xFF) == CMD_HEADER_HI && (raw[1] & 0xFF) == CMD_HEADER_LO) ? HEADER_LEN : 0;
-            parseBoxesFromJson(raw, payloadStart, raw.length - payloadStart, dets);
-            count = dets.size();
+            try {
+                parseBoxesFromJson(raw, 0, raw.length, dets);
+                count = dets.size();
+            } catch (Exception e) {
+                lastError = "json parse failed";
+                valid = false;
+            }
+        } else if (lastError == null) {
+            lastError = "no response";
         }
         return new LemonlightResult(raw, "", count, dets, ts, valid);
+    }
+
+    private void writePayload(byte[] payload) {
+        if (payload == null || payload.length == 0) return;
+        int len = Math.min(payload.length, LemonlightConstants.MAX_FRAME_LEN);
+        packetScratch[0] = (byte) CMD_HEADER;
+        packetScratch[1] = (byte) LemonlightConstants.CMD_WRITE;
+        packetScratch[2] = (byte) (len >> 8);
+        packetScratch[3] = (byte) (len & 0xFF);
+        System.arraycopy(payload, 0, packetScratch, HEADER_LEN, len);
+        writeRaw(packetScratch, HEADER_LEN + len);
+    }
+
+    private byte[] writePayloadThenRead(byte[] payload, int maxReadLen, long timeoutMs) {
+        writePayload(payload);
+        try {
+            Thread.sleep(20);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            lastError = "interrupted";
+            return null;
+        }
+        return readMessageWithTimeout(maxReadLen, timeoutMs);
+    }
+
+    private void writeRaw(byte[] packet, int length) {
+        try {
+            if (length <= 0 || length > packet.length) return;
+            if (length == packet.length) {
+                deviceClient.write(REG, packet);
+            } else {
+                byte[] slice = new byte[length];
+                System.arraycopy(packet, 0, slice, 0, length);
+                deviceClient.write(REG, slice);
+            }
+        } catch (Exception e) {
+            lastError = e.getMessage();
+        }
+    }
+
+    private byte[] readRaw(int maxLen) {
+        try {
+            return deviceClient.read(REG, maxLen);
+        } catch (Exception e) {
+            lastError = e.getMessage();
+            return null;
+        }
     }
 
     private void parseBoxesFromJson(byte[] raw, int offset, int len, List<LemonlightResult.Detection> out) {
@@ -129,28 +271,5 @@ public class Lemonlight extends I2cDeviceSynchDevice<I2cDeviceSynch> {
             int targetId = Integer.parseInt(parts[5].trim());
             out.add(new LemonlightResult.Detection(x, y, w, h, score, targetId));
         } catch (NumberFormatException ignored) {}
-    }
-
-    private byte[] sendCommand(byte[] cmd, int maxReadLen) {
-        if (cmd == null || cmd.length == 0) return null;
-        int len = cmd.length;
-        byte[] packet = new byte[HEADER_LEN + len];
-        packet[0] = (byte) CMD_HEADER_HI;
-        packet[1] = (byte) CMD_HEADER_LO;
-        packet[2] = (byte) (len >> 8);
-        packet[3] = (byte) (len & 0xFF);
-        System.arraycopy(cmd, 0, packet, HEADER_LEN, len);
-        try {
-            deviceClient.write(REG, packet);
-            Thread.sleep(20);
-            return deviceClient.read(REG, maxReadLen);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            lastError = e.getMessage();
-            return null;
-        } catch (Exception e) {
-            lastError = e.getMessage();
-            return null;
-        }
     }
 }
