@@ -26,12 +26,9 @@ public class GroveVisionI2C_OneShotTest extends LinearOpMode {
         boolean initOk = lemonlight.ping();
         String fwVer = lemonlight.getFirmwareVersion();
 
-        telemetry.addLine(initOk ? "Driver initialized" : "Driver init failed");
+        telemetry.addLine(initOk ? "Driver initialized ✓" : "Driver init failed ✗");
         telemetry.addData("Address", "0x%02X", LemonlightConstants.I2C_ADDRESS_7BIT);
         telemetry.addData("Firmware", fwVer != null && !fwVer.isEmpty() ? fwVer : "n/a");
-        if (lemonlight.getLastError() != null) {
-            telemetry.addData("Last error", lemonlight.getLastError());
-        }
         telemetry.update();
         sleep(1000);
 
@@ -64,14 +61,22 @@ public class GroveVisionI2C_OneShotTest extends LinearOpMode {
                 if (result != null && result.isValid()) {
                     displayResponse(result.getRaw());
                     telemetry.addLine("Parsed: count=" + result.getDetectionCount() + " topScore=" + result.getTopScorePercent() + "%");
+                    telemetry.addLine("Boxes=" + result.getDetections().size() +
+                        " Classes=" + result.getClassifications().size() +
+                        " Points=" + result.getKeypoints().size());
                     return true;
                 }
+            } catch (LemonlightException e) {
+                telemetry.addData("Error Code", e.getShortCode());
+                telemetry.addData("Message", e.getUserMessage());
+                telemetry.addData("Recoverable", e.isRecoverable() ? "Yes" : "No");
             } catch (Exception e) {
-                if (lemonlight.getLastError() != null) {
-                    telemetry.addData("Error", lemonlight.getLastError());
-                }
+                telemetry.addData("Error", e.getClass().getSimpleName());
+                telemetry.addData("Message", e.getMessage());
             }
             if (attempt < MAX_RETRIES) {
+                telemetry.addData("Retry", "Attempt " + (attempt + 1) + "/" + MAX_RETRIES);
+                telemetry.update();
                 sleep(RETRY_DELAY_MS);
             }
         }
